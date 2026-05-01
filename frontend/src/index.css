@@ -1,0 +1,314 @@
+:root {
+  --bg-color: #1a1a1a;
+  --panel-bg: #262626;
+  --editor-bg: #1e1e1e;
+  --primary: #ff7b00;
+  --primary-hover: #ff5500;
+  --secondary: #ffcc00;
+  --secondary-hover: #e6b800;
+  --danger: #ff3333;
+  --success: #10b981;
+  --text-primary: #e5e5e5;
+  --text-secondary: #a3a3a3;
+  --border-color: #3e3e3e;
+  --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family);
+  background: var(--bg-color);
+  color: var(--text-primary);
+  min-height: 100vh;
+  margin: 0;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+h1 { font-size: 2rem; color: #fff; }
+h2 { font-size: 1.5rem; color: #ddd; }
+h3 { font-size: 1.25rem; color: #ccc; margin-bottom: 0.5rem; }
+h4 { font-size: 1rem; color: #bbb; margin-bottom: 0.5rem; }
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+a:hover {
+  color: var(--primary-hover);
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
+
+/* Base Panel (Flat Dark UI) */
+.glass-panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1.2rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+.btn-primary:hover {
+  background: var(--primary-hover);
+}
+
+.btn-secondary {
+  background: #3e3e3e;
+  color: #fff;
+}
+.btn-secondary:hover {
+  background: #4a4a4a;
+}
+
+.btn-danger {
+  background: rgba(255, 51, 51, 0.1);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+.btn-danger:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* Forms */
+.form-group {
+  margin-bottom: 1.2rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  font-weight: 500;
+  margin-bottom: 0.4rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.form-input {
+  background: #333;
+  border: 1px solid var(--border-color);
+  color: #fff;
+  padding: 0.6rem 0.8rem;
+  border-radius: 4px;
+  font-family: inherit;
+  transition: all 0.2s;
+  width: 100%;
+}
+.form-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* Header */
+.navbar {
+  padding: 0.8rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--border-color);
+}
+.navbar .brand {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #fff;
+}
+.navbar .brand span {
+  color: var(--primary);
+}
+.navbar .nav-links {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+/* Layouts */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+  width: 100%;
+}
+
+.solve-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.grid {
+  display: grid;
+  gap: 1.5rem;
+}
+.grid-2 { grid-template-columns: repeat(2, 1fr); }
+
+/* Leaderboard */
+.leaderboard {
+  width: 100%;
+  border-collapse: collapse;
+}
+.leaderboard th {
+  text-align: left;
+  padding: 0.8rem;
+  border-bottom: 2px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+.leaderboard td {
+  padding: 0.8rem;
+  border-bottom: 1px solid var(--border-color);
+}
+.leaderboard tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Badges */
+.badge {
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.badge-yellow { background: #423518; color: var(--secondary); border: 1px solid rgba(255,204,0,0.3); }
+.badge-orange { background: rgba(255, 123, 0, 0.2); color: var(--primary); border: 1px solid rgba(255,123,0,0.3); }
+
+/* Problem Statement Styling */
+.problem-title {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.problem-desc {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #ccc;
+  margin-bottom: 1rem;
+}
+.inline-code {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: 'Consolas', monospace;
+  font-size: 0.9em;
+  color: #fff;
+}
+.example-block {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 1.2rem;
+  margin: 1.5rem 0;
+  border: 1px solid var(--border-color);
+}
+.example-block pre {
+  margin-top: 0.5rem;
+  font-family: 'Consolas', monospace;
+  font-size: 0.9rem;
+  color: #ddd;
+  white-space: pre-wrap;
+}
+
+/* Editor Panel */
+.editor-wrapper {
+  background: var(--editor-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.editor-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background: #2a2a2a;
+  border-bottom: 1px solid var(--border-color);
+}
+.editor-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.8rem;
+  padding: 0.8rem 1rem;
+  background: #2a2a2a;
+  border-top: 1px solid var(--border-color);
+}
+
+/* Testcase/Terminal Panel */
+.testcase-panel {
+  background: var(--editor-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.testcase-header {
+  padding: 0.8rem 1rem;
+  background: #2a2a2a;
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+  color: #ccc;
+}
+.testcase-body {
+  padding: 1.5rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.test-block {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* Sudden Death Overlay */
+.sudden-death-overlay {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(26,26,26,0.95);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 50;
+  text-align: center;
+}
