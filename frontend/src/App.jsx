@@ -837,15 +837,6 @@ function ContestLayout({ userObj }) {
     } catch(e) { alert('Failed to end contest'); }
   };
 
-  const restartContest = async () => {
-    try {
-      await axios.post(`${API_URL}/contests/${contest.id}/restart`);
-      setContestStarted(true);
-      setContest(prev => ({ ...prev, status: 'active', start_time: new Date().toISOString() }));
-      localStorage.removeItem(`contest_${contest.id}_start`);
-    } catch(e) { alert('Failed to restart contest'); }
-  };
-
   const handleParticipantEnter = () => {
     if (contest.mode === 'sudden_death') {
       navigate(`/solve/${contest.id}/sudden-death`);
@@ -984,9 +975,6 @@ function ContestLayout({ userObj }) {
           )}
           {isHost && contest.status === 'pending' && (
             <button className="btn btn-primary" onClick={startStandard} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>Start Contest</button>
-          )}
-          {isHost && contest.status === 'ended' && (
-            <button className="btn btn-primary" onClick={restartContest} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>Restart Contest</button>
           )}
         </div>
       </div>
