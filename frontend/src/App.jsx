@@ -777,17 +777,27 @@ function ContestLayout({ userObj }) {
   useEffect(() => {
     if (contest && contestStarted && (contest.mode === 'standard' || contest.mode === 'timed')) {
       let start;
-      if (contest.start_time) {
+      if (contest.server_elapsed_seconds !== undefined && contest.server_elapsed_seconds !== null) {
+        start = Date.now() - (contest.server_elapsed_seconds * 1000);
+      } else if (contest.start_time) {
         start = new Date(contest.start_time + 'Z').getTime();
       } else {
         const lsKey = `contest_${contest.id}_start`;
         if (!localStorage.getItem(lsKey)) localStorage.setItem(lsKey, Date.now().toString());
         start = parseInt(localStorage.getItem(lsKey));
       }
-      setElapsedSeconds(Math.floor((Date.now() - start) / 1000));
-      const interval = setInterval(() => {
-        setElapsedSeconds(Math.floor((Date.now() - start) / 1000));
-      }, 1000);
+      
+      const updateTimer = () => {
+        const currentElapsed = Math.floor((Date.now() - start) / 1000);
+        setElapsedSeconds(currentElapsed);
+        if (contest.overall_time_limit && currentElapsed >= contest.overall_time_limit * 60) {
+           setContest(prev => ({ ...prev, status: 'ended' }));
+           setContestStarted(false);
+        }
+      };
+      
+      updateTimer();
+      const interval = setInterval(updateTimer, 1000);
       return () => clearInterval(interval);
     }
   }, [contest, contestStarted]);
@@ -1194,7 +1204,9 @@ function SolvePlatform() {
     if (!isSuddenDeath && contestInfo) {
       if (contestInfo.mode === 'standard') {
         let start;
-        if (contestInfo.start_time) {
+        if (contestInfo.server_elapsed_seconds !== undefined && contestInfo.server_elapsed_seconds !== null) {
+          start = Date.now() - (contestInfo.server_elapsed_seconds * 1000);
+        } else if (contestInfo.start_time) {
           start = new Date(contestInfo.start_time + 'Z').getTime();
         } else {
           // If start_time is null, try to read from localStorage to avoid resetting
@@ -1202,10 +1214,18 @@ function SolvePlatform() {
           if (!localStorage.getItem(lsKey)) localStorage.setItem(lsKey, Date.now().toString());
           start = parseInt(localStorage.getItem(lsKey));
         }
-        setElapsedSeconds(Math.floor((Date.now() - start) / 1000));
-        const interval = setInterval(() => {
-          setElapsedSeconds(Math.floor((Date.now() - start) / 1000));
-        }, 1000);
+        
+        const updateTimer = () => {
+          const currentElapsed = Math.floor((Date.now() - start) / 1000);
+          setElapsedSeconds(currentElapsed);
+          if (contestInfo.overall_time_limit && currentElapsed >= contestInfo.overall_time_limit * 60) {
+            alert("Time is up!");
+            navigate(`/contest/${contestId}`);
+          }
+        };
+        
+        updateTimer();
+        const interval = setInterval(updateTimer, 1000);
         return () => clearInterval(interval);
       } else if (contestInfo.mode === 'timed') {
         const questions = contestInfo.questions || [];

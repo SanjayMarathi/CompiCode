@@ -351,6 +351,14 @@ def get_contest(link_code: str):
                 "time_limit": cq.get("time_limit")
             })
             
+    elapsed = 0
+    if data.get("start_time"):
+        try:
+            st = datetime.fromisoformat(data["start_time"].replace('Z', ''))
+            elapsed = (datetime.utcnow() - st).total_seconds()
+        except:
+            pass
+
     return {
         "id": contest_doc.id,
         "title": data.get("title"),
@@ -358,6 +366,7 @@ def get_contest(link_code: str):
         "mode": data.get("mode"),
         "status": data.get("status"),
         "start_time": data.get("start_time"),
+        "server_elapsed_seconds": max(0, elapsed),
         "host_id": data.get("host_id"),
         "overall_time_limit": data.get("overall_time_limit"),
         "penalty_per_wrong_answer": data.get("penalty_per_wrong_answer"),
@@ -435,6 +444,14 @@ def get_contest_info_by_id(contest_id: str):
                 "time_limit": cq.get("time_limit")
             })
             
+    elapsed = 0
+    if data.get("start_time"):
+        try:
+            st = datetime.fromisoformat(data["start_time"].replace('Z', ''))
+            elapsed = (datetime.utcnow() - st).total_seconds()
+        except:
+            pass
+            
     return {
         "id": doc.id,
         "title": data.get("title"),
@@ -442,6 +459,7 @@ def get_contest_info_by_id(contest_id: str):
         "overall_time_limit": data.get("overall_time_limit"),
         "penalty_per_wrong_answer": data.get("penalty_per_wrong_answer"),
         "start_time": data.get("start_time"),
+        "server_elapsed_seconds": max(0, elapsed),
         "questions": q_data
     }
 
