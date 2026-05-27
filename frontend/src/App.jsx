@@ -837,6 +837,15 @@ function ContestLayout({ userObj }) {
     } catch(e) { alert('Failed to end contest'); }
   };
 
+  const restartContest = async () => {
+    try {
+      await axios.post(`${API_URL}/contests/${contest.id}/restart`);
+      setContestStarted(true);
+      setContest(prev => ({ ...prev, status: 'active', start_time: new Date().toISOString() }));
+      localStorage.removeItem(`contest_${contest.id}_start`);
+    } catch(e) { alert('Failed to restart contest'); }
+  };
+
   const handleParticipantEnter = () => {
     if (contest.mode === 'sudden_death') {
       navigate(`/solve/${contest.id}/sudden-death`);
@@ -976,6 +985,9 @@ function ContestLayout({ userObj }) {
           {isHost && contest.status === 'pending' && (
             <button className="btn btn-primary" onClick={startStandard} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>Start Contest</button>
           )}
+          {isHost && contest.status === 'ended' && (
+            <button className="btn btn-primary" onClick={restartContest} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>Restart Contest</button>
+          )}
         </div>
       </div>
 
@@ -1108,8 +1120,13 @@ function SolvePlatform() {
   const [roundCountdown, setRoundCountdown] = useState(10);
   const [contestInfo, setContestInfo] = useState(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [currentUser, setCurrentUser] = useState(null);
   const ws = useRef(null);
   const roundCountdownRef = useRef(null);
+
+  useEffect(() => {
+    axios.get(`${API_URL}/me`).then(res => setCurrentUser(res.data)).catch(() => {});
+  }, []);
 
   // Reset state when questionId changes (critical for timed mode navigation)
   useEffect(() => {
@@ -1151,18 +1168,21 @@ function SolvePlatform() {
     fetchInfo();
     const infoInterval = setInterval(fetchInfo, 5000);
 
-    if (isSuddenDeath) {
-      ws.current = new WebSocket(`${WS_URL}/ws/contest/${contestId}`);
-      ws.current.onmessage = (event) => {
-        const msg = JSON.parse(event.data);
+    // Connect WebSocket for ALL modes to listen for CONTEST_ENDED
+    ws.current = new WebSocket(`${WS_URL}/ws/contest/${contestId}`);
+    ws.current.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'CONTEST_ENDED') {
+        navigate(`/contest/${contestId}`);
+      } else if (isSuddenDeath) {
         if (msg.type === 'SYNC_STATE') {
           setSdState(msg.data);
           setSdGlobalTimer(prev => prev === null ? msg.data.sync_timer : prev);
         } else if (msg.type === 'TIMER_TICK') {
           setSdGlobalTimer(msg.data);
         }
-      };
-    }
+      }
+    };
     
     return () => {
       clearInterval(infoInterval);
@@ -1170,6 +1190,14 @@ function SolvePlatform() {
       if (roundCountdownRef.current) clearInterval(roundCountdownRef.current);
     };
   }, [contestId, isSuddenDeath, navigate]);
+
+  const endContest = async () => {
+    if (!window.confirm("Are you sure you want to end this contest for everyone?")) return;
+    try {
+      await axios.post(`${API_URL}/contests/${contestId}/end`);
+      navigate(`/contest/${contestId}`);
+    } catch(e) { alert('Failed to end contest'); }
+  };
 
   // Elapsed time counter for standard/timed modes
   useEffect(() => {
@@ -1355,11 +1383,17 @@ function SolvePlatform() {
 
   // Build the navigation list for timed mode (to show all problems with navigation)
   const timedQuestions = (!isSuddenDeath && contestInfo && contestInfo.mode === 'timed' && contestInfo.questions) ? contestInfo.questions : [];
+  const isHost = currentUser && contestInfo && currentUser.id === contestInfo.host_id;
 
   return (
     <div className="solve-container">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <button className="btn btn-secondary" onClick={() => navigate(-1)} style={{ padding: '0.4rem 0.8rem' }}>&larr; Back</button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button className="btn btn-secondary" onClick={() => navigate(-1)} style={{ padding: '0.4rem 0.8rem' }}>&larr; Back</button>
+          {isHost && (
+            <button className="btn btn-danger" onClick={endContest} style={{ padding: '0.4rem 0.8rem' }}>End Contest</button>
+          )}
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           {/* Sudden Death mode intentionally omits the timer to focus purely on who finishes first */}
           {!isSuddenDeath && contestInfo && contestInfo.mode === 'standard' && (

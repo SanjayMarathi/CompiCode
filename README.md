@@ -1,3 +1,12 @@
+---
+title: CompiCode Arena
+emoji: 🏟️
+colorFrom: red
+colorTo: blue
+sdk: docker
+pinned: false
+---
+
 # CompiCode Arena
 
 CompiCode Arena is a real-time, highly-interactive competitive programming platform featuring multiple dynamic contest modes (Standard, Timed, Sudden Death), automated code execution, and live leaderboards.

@@ -410,7 +410,19 @@ async def end_contest(contest_id: str):
     if state:
         state["state"] = "FINISHED"
         await manager.set_state(contest_id, state)
+        
+    await manager.broadcast(contest_id, {"type": "CONTEST_ENDED"})
     return {"success": True, "message": "Contest ended"}
+
+@app.post("/contests/{contest_id}/restart")
+async def restart_contest(contest_id: str):
+    doc_ref = db.collection("contests").document(contest_id)
+    if doc_ref.get().exists:
+        doc_ref.update({
+            "status": "active",
+            "start_time": datetime.utcnow().isoformat()
+        })
+    return {"success": True, "message": "Contest restarted"}
 
 @app.get("/contests/{contest_id}/info")
 def get_contest_info_by_id(contest_id: str):
@@ -478,7 +490,7 @@ async def submit_code(submission: SubmitCode, current_user: dict = Depends(get_c
     payload = {
         "code": submission.code,
         "language": submission.language,
-        "test_cases": test_cases
+        "test_cases": [{"input": tc.get("input_data", ""), "expected_output": tc.get("expected_output", "")} for tc in test_cases]
     }
     
     eval_results = []
