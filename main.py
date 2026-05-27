@@ -359,6 +359,13 @@ def get_contest(link_code: str):
         except:
             pass
 
+    # Auto-end standard contest if time is up
+    if data.get("mode") == "standard" and data.get("status") == "active" and data.get("overall_time_limit"):
+        if elapsed >= data["overall_time_limit"] * 60:
+            contest_doc.reference.update({"status": "ended"})
+            data["status"] = "ended"
+            asyncio.create_task(manager.broadcast(contest_doc.id, {"type": "CONTEST_ENDED"}))
+
     return {
         "id": contest_doc.id,
         "title": data.get("title"),
@@ -452,6 +459,13 @@ def get_contest_info_by_id(contest_id: str):
         except:
             pass
             
+    # Auto-end standard contest if time is up
+    if data.get("mode") == "standard" and data.get("status") == "active" and data.get("overall_time_limit"):
+        if elapsed >= data["overall_time_limit"] * 60:
+            doc.reference.update({"status": "ended"})
+            data["status"] = "ended"
+            asyncio.create_task(manager.broadcast(doc.id, {"type": "CONTEST_ENDED"}))
+
     return {
         "id": doc.id,
         "title": data.get("title"),
@@ -459,6 +473,7 @@ def get_contest_info_by_id(contest_id: str):
         "overall_time_limit": data.get("overall_time_limit"),
         "penalty_per_wrong_answer": data.get("penalty_per_wrong_answer"),
         "start_time": data.get("start_time"),
+        "status": data.get("status"),
         "server_elapsed_seconds": max(0, elapsed),
         "questions": q_data
     }
@@ -486,6 +501,23 @@ async def submit_code(submission: SubmitCode, current_user: dict = Depends(get_c
         
     if next(already_passed, None):
         return {"passed": True, "already_solved": True, "results": [], "message": "You already solved this question!"}
+
+    if contest.get("status") != "active":
+        return {"passed": False, "results": [], "error": "This contest has ended. Submissions are no longer accepted."}
+
+    elapsed = 0
+    if contest.get("start_time"):
+        try:
+            st = datetime.fromisoformat(contest["start_time"].replace('Z', ''))
+            elapsed = (datetime.utcnow() - st).total_seconds()
+        except:
+            pass
+            
+    if contest.get("mode") == "standard" and contest.get("overall_time_limit"):
+        if elapsed >= contest["overall_time_limit"] * 60:
+            contest_doc.reference.update({"status": "ended"})
+            asyncio.create_task(manager.broadcast(submission.contest_id, {"type": "CONTEST_ENDED"}))
+            return {"passed": False, "results": [], "error": "Time is up! The contest has ended."}
 
     state = manager.get_state(submission.contest_id)
     if contest.get("mode") == "sudden_death" and state and state["state"] != "QUESTION_ACTIVE":
