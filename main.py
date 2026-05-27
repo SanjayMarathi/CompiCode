@@ -4,7 +4,6 @@ from typing import List, Optional, Dict
 from fastapi import FastAPI, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -12,11 +11,10 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
+import uuid
+from google.cloud.firestore_v1.base_query import FieldFilter
 
-from database import (
-    engine, SessionLocal, Base, init_db, get_db,
-    User, Contest, Question, TestCase, Submission, ContestQuestion, ContestParticipant
-)
+from database import db
 
 # Configurations
 SECRET_KEY = "mysecretkey_change_in_production"
@@ -35,10 +33,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.on_event("startup")
-def on_startup():
-    init_db()
 
 # --- Auth Helpers ---
 def verify_password(plain_password, hashed_password):
@@ -59,7 +53,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -71,10 +65,15 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    user = db.query(User).filter(User.username == username).first()
-    if user is None:
+        
+    users_ref = db.collection("users").where(filter=FieldFilter("username", "==", username)).limit(1).stream()
+    user_doc = next(users_ref, None)
+    if not user_doc:
         raise credentials_exception
-    return user
+        
+    user_data = user_doc.to_dict()
+    user_data["id"] = user_doc.id
+    return user_data
 
 # --- Pydantic Schemas ---
 class UserCreate(BaseModel):
@@ -96,58 +95,58 @@ class QuestionCreate(BaseModel):
     test_cases: List[TestCaseCreate]
 
 class ContestQuestionInfo(BaseModel):
-    question_id: int
+    question_id: str
     points: int = 10
-    time_limit: int = 300  # Only used for Timed Mode
+    time_limit: int = 300  
 
 class ContestCreate(BaseModel):
     title: str
     description: Optional[str] = None
-    mode: str = "standard" # standard, sudden_death, timed
+    mode: str = "standard" 
     penalty_per_wrong_answer: int = 5
-    overall_time_limit: int = 60 # minutes
+    overall_time_limit: int = 60 
     selected_questions: List[ContestQuestionInfo]
 
 class SubmitCode(BaseModel):
     code: str
     language: str
-    question_id: int
-    contest_id: int
+    question_id: str
+    contest_id: str
 
 # --- WebSocket Manager for Sudden Death ---
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: Dict[int, List[WebSocket]] = {}
-        self.contest_state: Dict[int, dict] = {}
+        self.active_connections: Dict[str, List[WebSocket]] = {}
+        self.contest_state: Dict[str, dict] = {}
         
-    async def connect(self, websocket: WebSocket, contest_id: int):
+    async def connect(self, websocket: WebSocket, contest_id: str):
         await websocket.accept()
         if contest_id not in self.active_connections:
             self.active_connections[contest_id] = []
         self.active_connections[contest_id].append(websocket)
         
         if contest_id not in self.contest_state:
-            db = SessionLocal()
-            c = db.query(Contest).filter(Contest.id == contest_id).first()
-            limit_sec = c.overall_time_limit * 60 if c else 3600
-            db.close()
+            doc = db.collection("contests").document(contest_id).get()
+            limit_sec = 3600
+            if doc.exists:
+                limit_sec = doc.to_dict().get("overall_time_limit", 60) * 60
             
             self.contest_state[contest_id] = {
                 "state": "WAITING_TO_START", 
                 "current_q_idx": 0,
                 "active_question_id": None,
                 "winner": None,
-                "sync_timer": limit_sec, # This acts as the global timer for sudden death
+                "sync_timer": limit_sec,
             }
         
         await websocket.send_json({"type": "SYNC_STATE", "data": self.contest_state[contest_id]})
 
-    def disconnect(self, websocket: WebSocket, contest_id: int):
+    def disconnect(self, websocket: WebSocket, contest_id: str):
         if contest_id in self.active_connections:
             if websocket in self.active_connections[contest_id]:
                 self.active_connections[contest_id].remove(websocket)
 
-    async def broadcast(self, contest_id: int, message: dict):
+    async def broadcast(self, contest_id: str, message: dict):
         if contest_id in self.active_connections:
             for connection in self.active_connections[contest_id]:
                 try:
@@ -155,10 +154,10 @@ class ConnectionManager:
                 except:
                     pass
                     
-    def get_state(self, contest_id: int):
+    def get_state(self, contest_id: str):
         return self.contest_state.get(contest_id)
         
-    async def set_state(self, contest_id: int, state_updates: dict):
+    async def set_state(self, contest_id: str, state_updates: dict):
         if contest_id in self.contest_state:
             self.contest_state[contest_id].update(state_updates)
             await self.broadcast(contest_id, {"type": "SYNC_STATE", "data": self.contest_state[contest_id]})
@@ -166,19 +165,16 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 # --- Async Timer Loop for Sudden Death ---
-async def sudden_death_timer(contest_id: int):
-    # This runs when a round is won
+async def sudden_death_timer(contest_id: str):
     state = manager.get_state(contest_id)
     if not state: return
     
-    # Pause clock for 10s between rounds
     break_timer = 10 
     state["state"] = "ROUND_OVER"
     await manager.set_state(contest_id, state)
     
     while break_timer > 0:
         await asyncio.sleep(1)
-        # Global timer still counts down during breaks
         state = manager.get_state(contest_id)
         if not state: return
         state["sync_timer"] -= 1
@@ -190,24 +186,19 @@ async def sudden_death_timer(contest_id: int):
             await manager.set_state(contest_id, state)
             return
 
-    # Break over! Advance to next round
     state = manager.get_state(contest_id)
     state["current_q_idx"] += 1
     
-    db = SessionLocal()
-    cqs = db.query(ContestQuestion).filter(ContestQuestion.contest_id == contest_id).all()
+    doc = db.collection("contests").document(contest_id).get()
+    cqs = doc.to_dict().get("questions", []) if doc.exists else []
     total_q = len(cqs)
     
     if state["current_q_idx"] >= total_q:
         state["state"] = "CONTEST_OVER"
         await manager.set_state(contest_id, state)
-        db.close()
         return
 
-    # Link the correct DB question ID to state!
-    active_qid = cqs[state["current_q_idx"]].question_id
-    db.close()
-
+    active_qid = cqs[state["current_q_idx"]].get("question_id")
     state["state"] = "QUESTION_ACTIVE"
     state["winner"] = None
     state["active_question_id"] = active_qid
@@ -215,14 +206,13 @@ async def sudden_death_timer(contest_id: int):
     
     asyncio.create_task(global_active_timer(contest_id, state["current_q_idx"]))
 
-async def global_active_timer(contest_id: int, q_idx: int):
-    # Just ticks the global timer. Waits for winner or global time out.
+async def global_active_timer(contest_id: str, q_idx: int):
     state = manager.get_state(contest_id)
     while state and state["state"] == "QUESTION_ACTIVE" and state["current_q_idx"] == q_idx and state["sync_timer"] > 0:
         await asyncio.sleep(1)
         state = manager.get_state(contest_id)
         if state["state"] != "QUESTION_ACTIVE" or state["current_q_idx"] != q_idx:
-            return # Someone won, loop broken.
+            return 
         state["sync_timer"] -= 1
         await manager.broadcast(contest_id, {"type": "TIMER_TICK", "data": state["sync_timer"]})
         
@@ -233,121 +223,154 @@ async def global_active_timer(contest_id: int, q_idx: int):
 
 # --- Routes ---
 @app.post("/register")
-def register(user: UserCreate, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.username == user.username).first():
+def register(user: UserCreate):
+    users = db.collection("users").where(filter=FieldFilter("username", "==", user.username)).limit(1).stream()
+    if next(users, None):
         raise HTTPException(status_code=400, detail="Username already registered")
-    new_user = User(username=user.username, hashed_password=get_password_hash(user.password))
-    db.add(new_user)
-    db.commit()
+    
+    db.collection("users").add({
+        "username": user.username,
+        "hashed_password": get_password_hash(user.password)
+    })
     return {"message": "User registered successfully"}
 
 @app.post("/token", response_model=Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == form_data.username).first()
-    if not user or not verify_password(form_data.password, user.hashed_password):
+def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    users = db.collection("users").where(filter=FieldFilter("username", "==", form_data.username)).limit(1).stream()
+    user_doc = next(users, None)
+    if not user_doc:
         raise HTTPException(status_code=401, detail="Incorrect credentials")
     
-    access_token = create_access_token(data={"sub": user.username})
+    user_data = user_doc.to_dict()
+    if not verify_password(form_data.password, user_data["hashed_password"]):
+        raise HTTPException(status_code=401, detail="Incorrect credentials")
+    
+    access_token = create_access_token(data={"sub": user_data["username"]})
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.get("/me")
-def get_me(current_user: User = Depends(get_current_user)):
-    return {"username": current_user.username, "id": current_user.id}
+def get_me(current_user: dict = Depends(get_current_user)):
+    return {"username": current_user["username"], "id": current_user["id"]}
 
 @app.get("/questions")
-def get_questions(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    questions = db.query(Question).filter((Question.is_global == True) | (Question.creator_id == current_user.id)).all()
-    return [{"id": q.id, "title": q.title, "description": q.description} for q in questions]
+def get_questions(current_user: dict = Depends(get_current_user)):
+    docs = db.collection("questions").stream()
+    questions = []
+    for doc in docs:
+        data = doc.to_dict()
+        if data.get("is_global") or data.get("creator_id") == current_user["id"]:
+            questions.append({"id": doc.id, "title": data.get("title"), "description": data.get("description")})
+    return questions
 
 @app.post("/questions")
-def create_question(question: QuestionCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    new_q = Question(title=question.title, description=question.description, is_global=question.is_global, creator_id=current_user.id)
-    db.add(new_q)
-    db.commit()
-    db.refresh(new_q)
-    for tc in question.test_cases:
-        db.add(TestCase(question_id=new_q.id, input_data=tc.input_data, expected_output=tc.expected_output))
-    db.commit()
-    return {"message": "Question added to bank", "id": new_q.id}
+def create_question(question: QuestionCreate, current_user: dict = Depends(get_current_user)):
+    doc_ref = db.collection("questions").document()
+    doc_ref.set({
+        "title": question.title,
+        "description": question.description,
+        "is_global": question.is_global,
+        "creator_id": current_user["id"],
+        "test_cases": [{"input_data": tc.input_data, "expected_output": tc.expected_output} for tc in question.test_cases]
+    })
+    return {"message": "Question added to bank", "id": doc_ref.id}
 
 @app.put("/questions/{q_id}")
-def update_question(q_id: int, question: QuestionCreate, db: Session = Depends(get_db)):
-    q = db.query(Question).filter(Question.id == q_id).first()
-    if not q:
+def update_question(q_id: str, question: QuestionCreate):
+    doc_ref = db.collection("questions").document(q_id)
+    if not doc_ref.get().exists:
         raise HTTPException(status_code=404, detail="Question not found")
-    q.title = question.title
-    q.description = question.description
-    db.query(TestCase).filter(TestCase.question_id == q_id).delete()
-    for tc in question.test_cases:
-        db.add(TestCase(question_id=q.id, input_data=tc.input_data, expected_output=tc.expected_output))
-    db.commit()
+    
+    doc_ref.update({
+        "title": question.title,
+        "description": question.description,
+        "test_cases": [{"input_data": tc.input_data, "expected_output": tc.expected_output} for tc in question.test_cases]
+    })
     return {"message": "Question updated successfully"}
 
 @app.get("/questions/{q_id}")
-def get_single_question(q_id: int, db: Session = Depends(get_db)):
-    q = db.query(Question).filter(Question.id == q_id).first()
-    if not q:
+def get_single_question(q_id: str):
+    doc = db.collection("questions").document(q_id).get()
+    if not doc.exists:
         raise HTTPException(404, "Question not found")
-    tcs = db.query(TestCase).filter(TestCase.question_id == q_id).all()
+    
+    data = doc.to_dict()
     return {
-        "id": q.id,
-        "title": q.title,
-        "description": q.description,
-        "test_cases": [{"input": tc.input_data, "expected": tc.expected_output} for tc in tcs]
+        "id": doc.id,
+        "title": data.get("title"),
+        "description": data.get("description"),
+        "test_cases": [{"input": tc.get("input_data"), "expected": tc.get("expected_output")} for tc in data.get("test_cases", [])]
     }
 
 @app.post("/contests")
-def create_contest(contest: ContestCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    new_contest = Contest(
-        title=contest.title,
-        description=contest.description,
-        mode=contest.mode,
-        host_id=current_user.id,
-        penalty_per_wrong_answer=contest.penalty_per_wrong_answer,
-        overall_time_limit=contest.overall_time_limit
-    )
-    db.add(new_contest)
-    db.commit()
-    db.refresh(new_contest)
+def create_contest(contest: ContestCreate, current_user: dict = Depends(get_current_user)):
+    link_code = str(uuid.uuid4())[:8]
+    doc_ref = db.collection("contests").document()
     
+    questions = []
     for sq in contest.selected_questions:
-        cq = ContestQuestion(contest_id=new_contest.id, question_id=sq.question_id, points=sq.points, time_limit=sq.time_limit)
-        db.add(cq)
-    db.commit()
-    return {"message": "Contest created!", "link_code": new_contest.link_code}
-
-@app.get("/contests/{link_code}")
-def get_contest(link_code: str, db: Session = Depends(get_db)):
-    contest = db.query(Contest).filter(Contest.link_code == link_code).first()
-    if not contest:
-        raise HTTPException(status_code=404, detail="Contest not found")
+        questions.append({
+            "question_id": sq.question_id,
+            "points": sq.points,
+            "time_limit": sq.time_limit
+        })
         
-    c_questions = db.query(ContestQuestion).filter(ContestQuestion.contest_id == contest.id).all()
-    q_data = []
-    for cq in c_questions:
-        q = db.query(Question).filter(Question.id == cq.question_id).first()
-        q_data.append({"id": q.id, "title": q.title, "description": q.description, "points": cq.points, "time_limit": cq.time_limit})
-        
-    return {
-        "id": contest.id,
+    doc_ref.set({
         "title": contest.title,
         "description": contest.description,
         "mode": contest.mode,
-        "status": contest.status,
-        "start_time": contest.start_time.isoformat() if contest.start_time else None,
-        "host_id": contest.host_id,
-        "overall_time_limit": contest.overall_time_limit,
+        "host_id": current_user["id"],
         "penalty_per_wrong_answer": contest.penalty_per_wrong_answer,
+        "overall_time_limit": contest.overall_time_limit,
+        "link_code": link_code,
+        "status": "waiting",
+        "start_time": None,
+        "created_at": datetime.utcnow().isoformat(),
+        "questions": questions
+    })
+    return {"message": "Contest created!", "link_code": link_code}
+
+@app.get("/contests/{link_code}")
+def get_contest(link_code: str):
+    contests = db.collection("contests").where(filter=FieldFilter("link_code", "==", link_code)).limit(1).stream()
+    contest_doc = next(contests, None)
+    if not contest_doc:
+        raise HTTPException(status_code=404, detail="Contest not found")
+        
+    data = contest_doc.to_dict()
+    
+    q_data = []
+    for cq in data.get("questions", []):
+        q_doc = db.collection("questions").document(cq["question_id"]).get()
+        if q_doc.exists:
+            q = q_doc.to_dict()
+            q_data.append({
+                "id": q_doc.id, 
+                "title": q.get("title"), 
+                "description": q.get("description"), 
+                "points": cq.get("points"), 
+                "time_limit": cq.get("time_limit")
+            })
+            
+    return {
+        "id": contest_doc.id,
+        "title": data.get("title"),
+        "description": data.get("description"),
+        "mode": data.get("mode"),
+        "status": data.get("status"),
+        "start_time": data.get("start_time"),
+        "host_id": data.get("host_id"),
+        "overall_time_limit": data.get("overall_time_limit"),
+        "penalty_per_wrong_answer": data.get("penalty_per_wrong_answer"),
         "questions": q_data
     }
 
 @app.post("/contests/{contest_id}/start")
-async def start_sudden_death_contest(contest_id: int):
-    db = SessionLocal()
+async def start_sudden_death_contest(contest_id: str):
     state = manager.get_state(contest_id)
+    doc = db.collection("contests").document(contest_id).get()
+    
     if not state:
-        c = db.query(Contest).filter(Contest.id == contest_id).first()
-        limit_sec = c.overall_time_limit * 60 if c else 3600
+        limit_sec = doc.to_dict().get("overall_time_limit", 60) * 60 if doc.exists else 3600
         state = {
             "state": "WAITING_TO_START", 
             "current_q_idx": 0,
@@ -357,9 +380,8 @@ async def start_sudden_death_contest(contest_id: int):
         }
         manager.contest_state[contest_id] = state
         
-    cqs = db.query(ContestQuestion).filter(ContestQuestion.contest_id == contest_id).all()
-    q_id = cqs[0].question_id if cqs else 1
-    db.close()
+    cqs = doc.to_dict().get("questions", []) if doc.exists else []
+    q_id = cqs[0]["question_id"] if cqs else None
     
     state["state"] = "QUESTION_ACTIVE"
     state["current_q_idx"] = 0
@@ -369,26 +391,21 @@ async def start_sudden_death_contest(contest_id: int):
     return {"success": True}
 
 @app.post("/contests/{contest_id}/open")
-async def open_contest_for_standard(contest_id: int):
-    """Mark a standard/timed contest as open."""
-    db = SessionLocal()
-    contest = db.query(Contest).filter(Contest.id == contest_id).first()
-    if contest:
-        contest.status = "active"
-        contest.start_time = datetime.utcnow()
-        db.commit()
-    db.close()
+async def open_contest_for_standard(contest_id: str):
+    doc_ref = db.collection("contests").document(contest_id)
+    if doc_ref.get().exists:
+        doc_ref.update({
+            "status": "active",
+            "start_time": datetime.utcnow().isoformat()
+        })
     return {"success": True, "message": "Contest opened"}
 
 @app.post("/contests/{contest_id}/end")
-async def end_contest(contest_id: int):
-    """Mark a contest as ended."""
-    db = SessionLocal()
-    contest = db.query(Contest).filter(Contest.id == contest_id).first()
-    if contest:
-        contest.status = "ended"
-        db.commit()
-    db.close()
+async def end_contest(contest_id: str):
+    doc_ref = db.collection("contests").document(contest_id)
+    if doc_ref.get().exists:
+        doc_ref.update({"status": "ended"})
+        
     state = manager.get_state(contest_id)
     if state:
         state["state"] = "FINISHED"
@@ -396,22 +413,37 @@ async def end_contest(contest_id: int):
     return {"success": True, "message": "Contest ended"}
 
 @app.get("/contests/{contest_id}/info")
-def get_contest_info_by_id(contest_id: int, db: Session = Depends(get_db)):
-    """Get contest info by numeric ID (used by solve platform)."""
-    contest = db.query(Contest).filter(Contest.id == contest_id).first()
-    if not contest:
+def get_contest_info_by_id(contest_id: str):
+    doc = db.collection("contests").document(contest_id).get()
+    if not doc.exists:
         raise HTTPException(status_code=404, detail="Contest not found")
+        
+    data = doc.to_dict()
+    q_data = []
+    for cq in data.get("questions", []):
+        q_doc = db.collection("questions").document(cq["question_id"]).get()
+        if q_doc.exists:
+            q = q_doc.to_dict()
+            q_data.append({
+                "id": q_doc.id, 
+                "title": q.get("title"), 
+                "description": q.get("description"), 
+                "points": cq.get("points"), 
+                "time_limit": cq.get("time_limit")
+            })
+            
     return {
-        "id": contest.id,
-        "title": contest.title,
-        "mode": contest.mode,
-        "overall_time_limit": contest.overall_time_limit,
-        "penalty_per_wrong_answer": contest.penalty_per_wrong_answer,
-        "start_time": contest.start_time.isoformat() if contest.start_time else None
+        "id": doc.id,
+        "title": data.get("title"),
+        "mode": data.get("mode"),
+        "overall_time_limit": data.get("overall_time_limit"),
+        "penalty_per_wrong_answer": data.get("penalty_per_wrong_answer"),
+        "start_time": data.get("start_time"),
+        "questions": q_data
     }
 
 @app.websocket("/ws/contest/{contest_id}")
-async def websocket_endpoint(websocket: WebSocket, contest_id: int):
+async def websocket_endpoint(websocket: WebSocket, contest_id: str):
     await manager.connect(websocket, contest_id)
     try:
         while True:
@@ -420,33 +452,33 @@ async def websocket_endpoint(websocket: WebSocket, contest_id: int):
         manager.disconnect(websocket, contest_id)
 
 @app.post("/submit")
-async def submit_code(submission: SubmitCode, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    contest = db.query(Contest).filter(Contest.id == submission.contest_id).first()
-    if not contest:
+async def submit_code(submission: SubmitCode, current_user: dict = Depends(get_current_user)):
+    contest_doc = db.collection("contests").document(submission.contest_id).get()
+    if not contest_doc.exists:
         raise HTTPException(status_code=404, detail="Contest not found")
+    contest = contest_doc.to_dict()
 
-    # Block re-submission of already-passed questions
-    already_passed = db.query(Submission).filter(
-        Submission.contest_id == submission.contest_id,
-        Submission.user_id == current_user.id,
-        Submission.question_id == submission.question_id,
-        Submission.passed == True
-    ).first()
-    if already_passed:
+    already_passed = db.collection("submissions").where(filter=FieldFilter("contest_id", "==", submission.contest_id))\
+        .where(filter=FieldFilter("user_id", "==", current_user["id"]))\
+        .where(filter=FieldFilter("question_id", "==", submission.question_id))\
+        .where(filter=FieldFilter("passed", "==", True)).limit(1).stream()
+        
+    if next(already_passed, None):
         return {"passed": True, "already_solved": True, "results": [], "message": "You already solved this question!"}
 
     state = manager.get_state(submission.contest_id)
-    if contest.mode == "sudden_death" and state and state["state"] != "QUESTION_ACTIVE":
+    if contest.get("mode") == "sudden_death" and state and state["state"] != "QUESTION_ACTIVE":
         return {"passed": False, "results": [], "error": "Contest is not active"}
 
-    test_cases = db.query(TestCase).filter(TestCase.question_id == submission.question_id).all()
+    q_doc = db.collection("questions").document(submission.question_id).get()
+    test_cases = q_doc.to_dict().get("test_cases", []) if q_doc.exists else []
     if not test_cases:
         raise HTTPException(status_code=400, detail="No test cases found for this question")
     
     payload = {
         "code": submission.code,
         "language": submission.language,
-        "test_cases": [{"input": tc.input_data, "expected_output": tc.expected_output} for tc in test_cases]
+        "test_cases": test_cases
     }
     
     eval_results = []
@@ -467,74 +499,89 @@ async def submit_code(submission: SubmitCode, current_user: User = Depends(get_c
     passed_all = bool(eval_results) and all(r.get("passed", False) for r in eval_results)
             
     time_taken = 0
-    if contest.start_time:
-        time_taken = int((datetime.utcnow() - contest.start_time).total_seconds())
+    if contest.get("start_time"):
+        start_dt = datetime.fromisoformat(contest.get("start_time"))
+        time_taken = int((datetime.utcnow() - start_dt).total_seconds())
             
-    new_sub = Submission(
-        user_id=current_user.id,
-        question_id=submission.question_id,
-        contest_id=submission.contest_id,
-        passed=passed_all,
-        penalty_incurred=0 if passed_all else contest.penalty_per_wrong_answer,
-        time_taken=time_taken
-    )
-    db.add(new_sub)
-    db.commit()
+    db.collection("submissions").add({
+        "user_id": current_user["id"],
+        "question_id": submission.question_id,
+        "contest_id": submission.contest_id,
+        "passed": passed_all,
+        "penalty_incurred": 0 if passed_all else contest.get("penalty_per_wrong_answer", 5),
+        "time_taken": time_taken,
+        "timestamp": datetime.utcnow().isoformat()
+    })
     
-    if passed_all and contest.mode == "sudden_death" and state and state["state"] == "QUESTION_ACTIVE":
-        cqs = db.query(ContestQuestion).filter(ContestQuestion.contest_id == submission.contest_id).all()
-        if state["current_q_idx"] < len(cqs) and cqs[state["current_q_idx"]].question_id == submission.question_id:
-            state["winner"] = current_user.username
+    if passed_all and contest.get("mode") == "sudden_death" and state and state["state"] == "QUESTION_ACTIVE":
+        cqs = contest.get("questions", [])
+        if state["current_q_idx"] < len(cqs) and cqs[state["current_q_idx"]]["question_id"] == submission.question_id:
+            state["winner"] = current_user["username"]
             await manager.set_state(submission.contest_id, state)
             asyncio.create_task(sudden_death_timer(submission.contest_id))
     
     return {"passed": passed_all, "already_solved": False, "results": eval_results}
 
 @app.post("/contests/{contest_id}/join")
-def join_contest(contest_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    existing = db.query(ContestParticipant).filter(ContestParticipant.contest_id == contest_id, ContestParticipant.user_id == current_user.id).first()
-    if not existing:
-        db.add(ContestParticipant(contest_id=contest_id, user_id=current_user.id))
-        db.commit()
+def join_contest(contest_id: str, current_user: dict = Depends(get_current_user)):
+    existing = db.collection("participants").where(filter=FieldFilter("contest_id", "==", contest_id))\
+        .where(filter=FieldFilter("user_id", "==", current_user["id"])).limit(1).stream()
+    if not next(existing, None):
+        db.collection("participants").add({
+            "contest_id": contest_id,
+            "user_id": current_user["id"],
+            "joined_at": datetime.utcnow().isoformat()
+        })
     return {"success": True}
 
 @app.get("/contests/{contest_id}/leaderboard")
-def get_leaderboard(contest_id: int, db: Session = Depends(get_db)):
-    contest = db.query(Contest).filter(Contest.id == contest_id).first()
-    if not contest: return []
+def get_leaderboard(contest_id: str):
+    contest_doc = db.collection("contests").document(contest_id).get()
+    if not contest_doc.exists: return []
+    contest = contest_doc.to_dict()
 
-    cqs = db.query(ContestQuestion).filter(ContestQuestion.contest_id == contest_id).order_by(ContestQuestion.id).all()
-    question_ids = [cq.question_id for cq in cqs]
-    points_map = {cq.question_id: cq.points for cq in cqs}
+    cqs = contest.get("questions", [])
+    question_ids = [cq["question_id"] for cq in cqs]
+    points_map = {cq["question_id"]: cq.get("points", 10) for cq in cqs}
 
-    participants = db.query(ContestParticipant).filter(ContestParticipant.contest_id == contest_id).all()
-    participant_user_ids = [p.user_id for p in participants]
-    users = db.query(User).filter(User.id.in_(participant_user_ids)).all() if participant_user_ids else []
+    participants = db.collection("participants").where(filter=FieldFilter("contest_id", "==", contest_id)).stream()
+    participant_user_ids = [p.to_dict().get("user_id") for p in participants]
+    
+    if not participant_user_ids:
+        return []
+        
+    users = []
+    # Firestore 'in' query limit is 30, but we'll fetch one by one or in batches for simplicity here
+    for uid in participant_user_ids:
+        u_doc = db.collection("users").document(uid).get()
+        if u_doc.exists:
+            u_data = u_doc.to_dict()
+            u_data["id"] = u_doc.id
+            users.append(u_data)
 
     leaderboard = []
 
-    for u in users:
-        subs = db.query(Submission).filter(
-            Submission.contest_id == contest_id,
-            Submission.user_id == u.id
-        ).order_by(Submission.id).all()
+    all_subs = db.collection("submissions").where(filter=FieldFilter("contest_id", "==", contest_id)).stream()
+    subs_list = [s.to_dict() for s in all_subs]
 
-        # Build per-question stats
+    for u in users:
+        u_subs = [s for s in subs_list if s.get("user_id") == u["id"]]
+        
         q_stats = {}
         for qid in question_ids:
-            q_subs = [s for s in subs if s.question_id == qid]
-            wrong = sum(1 for s in q_subs if not s.passed)
-            passed_sub = next((s for s in q_subs if s.passed), None)
+            q_subs = [s for s in u_subs if s.get("question_id") == qid]
+            wrong = sum(1 for s in q_subs if not s.get("passed", False))
+            passed_sub = next((s for s in q_subs if s.get("passed", False)), None)
             solved = passed_sub is not None
-            time_taken = passed_sub.time_taken if passed_sub else 0
+            time_taken = passed_sub.get("time_taken", 0) if passed_sub else 0
             q_stats[str(qid)] = {"solved": solved, "wrong_count": wrong, "time_taken": time_taken}
 
-        passed_qids = list(set(s.question_id for s in subs if s.passed))
+        passed_qids = list(set(s.get("question_id") for s in u_subs if s.get("passed", False)))
         score = sum(points_map.get(qid, 0) for qid in passed_qids)
-        total_penalty = sum(s.penalty_incurred for s in subs)
+        total_penalty = sum(s.get("penalty_incurred", 0) for s in u_subs)
 
         leaderboard.append({
-            "username": u.username,
+            "username": u.get("username"),
             "score": score,
             "penalty": total_penalty,
             "solved_count": len(passed_qids),
@@ -546,14 +593,33 @@ def get_leaderboard(contest_id: int, db: Session = Depends(get_db)):
     return leaderboard
 
 @app.get("/contests/{contest_id}/my-solved")
-def get_my_solved(contest_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Returns list of question IDs that the current user has already solved in this contest."""
-    solved = db.query(Submission).filter(
-        Submission.contest_id == contest_id,
-        Submission.user_id == current_user.id,
-        Submission.passed == True
-    ).all()
-    return {"solved_question_ids": list(set(s.question_id for s in solved))}
+def get_my_solved(contest_id: str, current_user: dict = Depends(get_current_user)):
+    solved = db.collection("submissions").where(filter=FieldFilter("contest_id", "==", contest_id))\
+        .where(filter=FieldFilter("user_id", "==", current_user["id"]))\
+        .where(filter=FieldFilter("passed", "==", True)).stream()
+    return {"solved_question_ids": list(set(s.to_dict().get("question_id") for s in solved))}
+
+# Dashboard specific routes
+@app.get("/user/contests/hosted")
+def get_hosted_contests(current_user: dict = Depends(get_current_user)):
+    contests = db.collection("contests").where(filter=FieldFilter("host_id", "==", current_user["id"])).stream()
+    res = []
+    for c in contests:
+        d = c.to_dict()
+        res.append({"id": c.id, "title": d.get("title"), "status": d.get("status"), "link_code": d.get("link_code"), "mode": d.get("mode")})
+    return res
+
+@app.get("/user/contests/participated")
+def get_participated_contests(current_user: dict = Depends(get_current_user)):
+    parts = db.collection("participants").where(filter=FieldFilter("user_id", "==", current_user["id"])).stream()
+    c_ids = [p.to_dict().get("contest_id") for p in parts]
+    res = []
+    for cid in c_ids:
+        c = db.collection("contests").document(cid).get()
+        if c.exists:
+            d = c.to_dict()
+            res.append({"id": c.id, "title": d.get("title"), "status": d.get("status"), "link_code": d.get("link_code"), "mode": d.get("mode")})
+    return res
 
 
 if os.path.exists("frontend/dist"):
