@@ -929,21 +929,7 @@ function ContestLayout({ userObj }) {
     );
   }
 
-  if (contest.status === 'ended') {
-    return (
-      <div className="container">
-        <div style={{ textAlign: 'center', padding: '4rem', background: 'rgba(0,0,0,0.5)', borderRadius: '8px', border: '1px solid var(--danger)', marginTop: '2rem', marginBottom: '2rem' }}>
-          <h2 style={{ color: 'var(--danger)', fontSize: '2.5rem', marginBottom: '1rem' }}>Contest Ended</h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '1.2rem', marginBottom: '2rem' }}>This contest has been terminated by the host. The final standings are locked.</p>
-          <button className="btn btn-secondary" onClick={() => navigate('/dashboard')} style={{ padding: '0.75rem 2rem' }}>Return to Dashboard</button>
-        </div>
-        <div className="glass-panel" style={{ width: '100%' }}>
-          <h3 style={{ marginBottom: '1rem' }}>Final Standings</h3>
-          <CodeforcesStandings leaderboard={leaderboard} questions={contest.questions} />
-        </div>
-      </div>
-    );
-  }
+
 
   // If the contest is active and user is NOT host, and they just joined late — show informational banner
   const isLateJoiner = contestStarted && contest.status === 'active' && !isHost;
