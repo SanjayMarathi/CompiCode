@@ -258,7 +258,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 @app.get("/me")
 def get_me(current_user: dict = Depends(get_current_user)):
-    return {"username": current_user["username"], "id": current_user["id"], "is_admin": current_user.get("is_admin", False)}
+    is_admin = current_user.get("is_admin", False) or current_user["username"].lower() == "admin"
+    return {"username": current_user["username"], "id": current_user["id"], "is_admin": is_admin}
 
 @app.get("/questions")
 def get_questions(current_user: dict = Depends(get_current_user)):
