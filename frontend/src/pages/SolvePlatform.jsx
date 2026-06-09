@@ -316,7 +316,14 @@ export default function SolvePlatform() {
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          {/* Sudden Death mode intentionally omits the timer to focus purely on who finishes first */}
+          {isSuddenDeath && sdGlobalTimer !== null && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Round Time:</span>
+              <span style={{ fontSize: '1.2rem', fontWeight: 600, color: '#ff7b00', background: 'var(--panel-bg)', padding: '0.2rem 1rem', borderRadius: '4px', border: '1px solid #ff7b00' }}>
+                {formatTime(sdGlobalTimer)}
+              </span>
+            </div>
+          )}
           {!isSuddenDeath && contestInfo && contestInfo.mode === 'standard' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Time Left:</span>
