@@ -659,7 +659,16 @@ def get_hosted_contests(current_user: dict = Depends(get_current_user)):
     res = []
     for c in contests:
         d = c.to_dict()
-        res.append({"id": c.id, "title": d.get("title"), "status": d.get("status"), "link_code": d.get("link_code"), "mode": d.get("mode")})
+        status = d.get("status")
+        if status == "active" and d.get("mode") in ["standard", "timed"] and d.get("overall_time_limit") and d.get("start_time"):
+            try:
+                st = datetime.fromisoformat(d["start_time"].replace('Z', ''))
+                if (datetime.utcnow() - st).total_seconds() >= d["overall_time_limit"] * 60:
+                    status = "ended"
+                    c.reference.update({"status": "ended"})
+            except:
+                pass
+        res.append({"id": c.id, "title": d.get("title"), "status": status, "link_code": d.get("link_code"), "mode": d.get("mode"), "start_time": d.get("start_time"), "host_name": current_user["username"]})
     return res
 
 @app.get("/user/contests/participated")
@@ -667,11 +676,33 @@ def get_participated_contests(current_user: dict = Depends(get_current_user)):
     parts = db.collection("participants").where(filter=FieldFilter("user_id", "==", current_user["id"])).stream()
     c_ids = [p.to_dict().get("contest_id") for p in parts]
     res = []
-    for cid in c_ids:
+    host_ids = set()
+    valid_docs = []
+    for cid in set(c_ids):
         c = db.collection("contests").document(cid).get()
         if c.exists:
-            d = c.to_dict()
-            res.append({"id": c.id, "title": d.get("title"), "status": d.get("status"), "link_code": d.get("link_code"), "mode": d.get("mode")})
+            valid_docs.append(c)
+            host_ids.add(c.to_dict().get("host_id", ""))
+    
+    hosts = {}
+    for hid in host_ids:
+        if hid:
+            u = db.collection("users").document(hid).get()
+            if u.exists:
+                hosts[hid] = u.to_dict().get("username", "Unknown")
+                
+    for c in valid_docs:
+        d = c.to_dict()
+        status = d.get("status")
+        if status == "active" and d.get("mode") in ["standard", "timed"] and d.get("overall_time_limit") and d.get("start_time"):
+            try:
+                st = datetime.fromisoformat(d["start_time"].replace('Z', ''))
+                if (datetime.utcnow() - st).total_seconds() >= d["overall_time_limit"] * 60:
+                    status = "ended"
+                    c.reference.update({"status": "ended"})
+            except:
+                pass
+        res.append({"id": c.id, "title": d.get("title"), "status": status, "link_code": d.get("link_code"), "mode": d.get("mode"), "start_time": d.get("start_time"), "host_name": hosts.get(d.get("host_id", ""), "Unknown")})
     return res
 
 
