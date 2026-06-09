@@ -113,6 +113,11 @@ class SubmitCode(BaseModel):
     question_id: str
     contest_id: str
 
+class SandboxTestRequest(BaseModel):
+    code: str
+    language: str
+    test_cases: List[Dict]
+
 # --- WebSocket Manager for Sudden Death ---
 class ConnectionManager:
     def __init__(self):
@@ -489,6 +494,31 @@ async def websocket_endpoint(websocket: WebSocket, contest_id: str):
             data = await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket, contest_id)
+
+@app.post("/sandbox/test")
+async def sandbox_test(req: SandboxTestRequest, current_user: dict = Depends(get_current_user)):
+    payload = {
+        "code": req.code,
+        "language": req.language,
+        "test_cases": [{"input": tc.get("input_data", ""), "expected_output": tc.get("expected_output", "")} for tc in req.test_cases]
+    }
+    eval_results = []
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://sanjaymarathi-compicode-executor.hf.space/evaluate",
+                json=payload,
+                timeout=20.0
+            )
+            data = response.json()
+            eval_results = data.get("results", [])
+    except httpx.TimeoutException:
+        return {"passed": False, "results": [], "error": "Execution timed out (Server unresponsive)"}
+    except Exception as e:
+        return {"passed": False, "results": [], "error": f"Execution engine error: {str(e)}"}
+        
+    passed = all(res.get("passed", False) for res in eval_results) if eval_results else False
+    return {"passed": passed, "results": eval_results}
 
 @app.post("/submit")
 async def submit_code(submission: SubmitCode, current_user: dict = Depends(get_current_user)):

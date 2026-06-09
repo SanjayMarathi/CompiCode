@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { API_URL } from '../config';
+import Editor from '@monaco-editor/react';
+import { API_URL, boilerplates } from '../config';
 
 export default function HostPanel() {
   const navigate = useNavigate();
@@ -19,9 +20,14 @@ export default function HostPanel() {
 
   const emptyProblem = () => ({ title: '', description: '', points: 10, time_limit: 300, test_cases: [{ input_data: '', expected_output: '' }, { input_data: '', expected_output: '' }] });
   const [draft, setDraft] = useState(emptyProblem());
+  const [sandboxLang, setSandboxLang] = useState('cpp');
+  const [sandboxCode, setSandboxCode] = useState(boilerplates['cpp']);
+  const [sandboxTesting, setSandboxTesting] = useState(false);
+  const [sandboxResults, setSandboxResults] = useState(null);
+  const [sandboxError, setSandboxError] = useState('');
 
-  const openNew = () => { setDraft(emptyProblem()); setEditingIdx(null); setShowProblemForm(true); };
-  const openEdit = (idx) => { setDraft({ ...contestQuestions[idx], test_cases: contestQuestions[idx].test_cases.map(t => ({...t})) }); setEditingIdx(idx); setShowProblemForm(true); };
+  const openNew = () => { setDraft(emptyProblem()); setEditingIdx(null); setSandboxCode(boilerplates['cpp']); setSandboxLang('cpp'); setSandboxResults(null); setSandboxError(''); setShowProblemForm(true); };
+  const openEdit = (idx) => { setDraft({ ...contestQuestions[idx], test_cases: contestQuestions[idx].test_cases.map(t => ({...t})) }); setEditingIdx(idx); setSandboxCode(boilerplates['cpp']); setSandboxLang('cpp'); setSandboxResults(null); setSandboxError(''); setShowProblemForm(true); };
 
   const openBank = async () => {
     try {
@@ -108,6 +114,29 @@ export default function HostPanel() {
   const updateTC = (i, field, val) => {
     const tcs = draft.test_cases.map((t, ti) => ti === i ? { ...t, [field]: val } : t);
     setDraft({ ...draft, test_cases: tcs });
+  };
+
+  const runSandbox = async () => {
+    if (draft.test_cases.length === 0) return alert('Add at least one test case to test');
+    setSandboxTesting(true);
+    setSandboxResults(null);
+    setSandboxError('');
+    try {
+      const res = await axios.post(`${API_URL}/sandbox/test`, {
+        code: sandboxCode,
+        language: sandboxLang,
+        test_cases: draft.test_cases
+      });
+      if (res.data.error) {
+        setSandboxError(res.data.error);
+      } else {
+        setSandboxResults(res.data.results);
+      }
+    } catch (err) {
+      setSandboxError(err.response?.data?.detail || 'Execution failed.');
+    } finally {
+      setSandboxTesting(false);
+    }
   };
 
   const deployContest = async () => {
@@ -291,50 +320,100 @@ export default function HostPanel() {
       {/* Problem Form Modal */}
       {showProblemForm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-          <div style={{ background: '#1e1e1e', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.5rem', width: '100%', maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <h3 style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>{editingIdx !== null ? 'Edit Problem' : 'New Problem'}</h3>
-            <form onSubmit={saveProblem}>
-              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                <label style={{ fontSize: '1.1rem', color: '#fff' }}>Problem Title</label>
-                <input required className="form-input" placeholder="e.g. Two Sum" value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} style={{ padding: '0.8rem', fontSize: '1rem' }} />
-              </div>
-              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                <label style={{ fontSize: '1.1rem', color: '#fff' }}>Problem Statement</label>
-                <textarea required className="form-input" rows="5" placeholder="Describe the problem. Include input/output format and constraints." value={draft.description} onChange={e => setDraft({ ...draft, description: e.target.value })} style={{ padding: '0.8rem', fontFamily: 'inherit', fontSize: '0.95rem' }} />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label>Points</label>
-                  <input type="number" min="1" className="form-input" value={draft.points} onChange={e => setDraft({ ...draft, points: parseInt(e.target.value) })} />
+          <div style={{ background: '#1e1e1e', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.5rem', width: '100%', maxWidth: '1200px', maxHeight: '90vh', display: 'flex', gap: '2rem' }}>
+            <div style={{ flex: 1, overflowY: 'auto', paddingRight: '0.5rem' }}>
+              <h3 style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>{editingIdx !== null ? 'Edit Problem' : 'New Problem'}</h3>
+              <form onSubmit={saveProblem}>
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ fontSize: '1.1rem', color: '#fff' }}>Problem Title</label>
+                  <input required className="form-input" placeholder="e.g. Two Sum" value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} style={{ padding: '0.8rem', fontSize: '1rem' }} />
                 </div>
-                {mode === 'timed' && (
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ fontSize: '1.1rem', color: '#fff' }}>Problem Statement</label>
+                  <textarea required className="form-input" rows="5" placeholder="Describe the problem. Include input/output format and constraints." value={draft.description} onChange={e => setDraft({ ...draft, description: e.target.value })} style={{ padding: '0.8rem', fontFamily: 'inherit', fontSize: '0.95rem' }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
                   <div className="form-group" style={{ flex: 1 }}>
-                    <label>Time Limit (seconds)</label>
-                    <input type="number" min="30" className="form-input" value={draft.time_limit} onChange={e => setDraft({ ...draft, time_limit: parseInt(e.target.value) })} />
+                    <label>Points</label>
+                    <input type="number" min="1" className="form-input" value={draft.points} onChange={e => setDraft({ ...draft, points: parseInt(e.target.value) })} />
                   </div>
-                )}
-              </div>
-
-              <div style={{ marginBottom: '0.5rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <label style={{ color: 'var(--text-secondary)' }}>Test Cases (min 2)</label>
-                  <button type="button" className="btn btn-secondary" onClick={() => setDraft({ ...draft, test_cases: [...draft.test_cases, { input_data: '', expected_output: '' }] })} style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}>+ Row</button>
+                  {mode === 'timed' && (
+                    <div className="form-group" style={{ flex: 1 }}>
+                      <label>Time Limit (seconds)</label>
+                      <input type="number" min="30" className="form-input" value={draft.time_limit} onChange={e => setDraft({ ...draft, time_limit: parseInt(e.target.value) })} />
+                    </div>
+                  )}
                 </div>
-                {draft.test_cases.map((tc, i) => (
-                  <div key={i} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'flex-start' }}>
-                    <span style={{ color: '#666', fontSize: '0.8rem', minWidth: '20px', marginTop: '0.5rem' }}>{i + 1}.</span>
-                    <textarea className="form-input" rows="2" placeholder="Input (empty if none)" value={tc.input_data} onChange={e => updateTC(i, 'input_data', e.target.value)} style={{ flex: 1, fontFamily: 'monospace', resize: 'vertical' }} />
-                    <textarea required className="form-input" rows="2" placeholder="Expected output" value={tc.expected_output} onChange={e => updateTC(i, 'expected_output', e.target.value)} style={{ flex: 1, fontFamily: 'monospace', resize: 'vertical' }} />
-                    {i >= 2 && <button type="button" className="btn btn-danger" onClick={() => setDraft({ ...draft, test_cases: draft.test_cases.filter((_, ti) => ti !== i) })} style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem', marginTop: '0.3rem' }}>X</button>}
-                  </div>
-                ))}
-              </div>
 
-              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowProblemForm(false)} style={{ flex: 1 }}>Cancel</button>
-                <button type="submit" className="btn btn-primary" style={{ flex: 2 }}>Save Problem</button>
+                <div style={{ marginBottom: '0.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <label style={{ color: 'var(--text-secondary)' }}>Test Cases (min 2)</label>
+                    <button type="button" className="btn btn-secondary" onClick={() => setDraft({ ...draft, test_cases: [...draft.test_cases, { input_data: '', expected_output: '' }] })} style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}>+ Row</button>
+                  </div>
+                  {draft.test_cases.map((tc, i) => (
+                    <div key={i} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'flex-start' }}>
+                      <span style={{ color: '#666', fontSize: '0.8rem', minWidth: '20px', marginTop: '0.5rem' }}>{i + 1}.</span>
+                      <textarea className="form-input" rows="2" placeholder="Input (empty if none)" value={tc.input_data} onChange={e => updateTC(i, 'input_data', e.target.value)} style={{ flex: 1, fontFamily: 'monospace', resize: 'vertical' }} />
+                      <textarea required className="form-input" rows="2" placeholder="Expected output" value={tc.expected_output} onChange={e => updateTC(i, 'expected_output', e.target.value)} style={{ flex: 1, fontFamily: 'monospace', resize: 'vertical' }} />
+                      {i >= 2 && <button type="button" className="btn btn-danger" onClick={() => setDraft({ ...draft, test_cases: draft.test_cases.filter((_, ti) => ti !== i) })} style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem', marginTop: '0.3rem' }}>X</button>}
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowProblemForm(false)} style={{ flex: 1 }}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 2 }}>Save Problem</button>
+                </div>
+              </form>
+            </div>
+            
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--border-color)', paddingLeft: '2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+                <h3 style={{ margin: 0 }}>Sandbox Testing</h3>
+                <select className="form-input" value={sandboxLang} onChange={e => {setSandboxLang(e.target.value); setSandboxCode(boilerplates[e.target.value]);}} style={{ width: 'auto', padding: '0.3rem 0.8rem', background: '#333' }}>
+                  <option value="cpp">C++</option>
+                  <option value="python">Python</option>
+                  <option value="java">Java</option>
+                </select>
               </div>
-            </form>
+              
+              <div style={{ flex: 1, border: '1px solid #333', minHeight: '300px' }}>
+                <Editor
+                  height="100%"
+                  theme="vs-dark"
+                  language={sandboxLang === 'cpp' ? 'cpp' : sandboxLang}
+                  value={sandboxCode}
+                  onChange={val => setSandboxCode(val)}
+                  options={{ minimap: { enabled: false }, fontSize: 14 }}
+                />
+              </div>
+              
+              <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: sandboxError ? 'var(--danger)' : 'var(--text-secondary)' }}>{sandboxError || (sandboxTesting ? 'Evaluating...' : 'Write code to test your problem cases')}</span>
+                <button type="button" className="btn btn-primary" onClick={runSandbox} disabled={sandboxTesting}>
+                  {sandboxTesting ? 'Running...' : 'Run Tests'}
+                </button>
+              </div>
+              
+              {sandboxResults && (
+                <div style={{ marginTop: '1rem', background: '#111', padding: '1rem', borderRadius: '4px', maxHeight: '200px', overflowY: 'auto' }}>
+                  {sandboxResults.map((res, i) => {
+                     let sanitizedActual = res.actual || 'No output';
+                     if (sanitizedActual.includes('File "') && sanitizedActual.includes('line')) {
+                       const lines = sanitizedActual.split('\n').map(l => l.trim()).filter(l => l);
+                       sanitizedActual = lines[lines.length - 1] || 'Runtime/Syntax Error';
+                     }
+                     return (
+                       <div key={i} style={{ borderLeft: `3px solid ${res.passed ? 'var(--success)' : 'var(--danger)'}`, paddingLeft: '0.5rem', marginBottom: '0.5rem', fontSize: '0.85rem' }}>
+                         <div style={{ color: res.passed ? 'var(--success)' : 'var(--danger)', fontWeight: 'bold' }}>Testcase {i + 1}: {res.passed ? 'Passed' : 'Failed'}</div>
+                         <div style={{ color: '#aaa', marginTop: '0.2rem', fontFamily: 'monospace' }}>Expected: {res.expected}</div>
+                         <div style={{ color: '#aaa', fontFamily: 'monospace' }}>Actual: {sanitizedActual}</div>
+                       </div>
+                     );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
