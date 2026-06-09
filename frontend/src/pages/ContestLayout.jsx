@@ -158,7 +158,7 @@ export default function ContestLayout({ userObj }) {
   };
 
   useEffect(() => {
-    if (contest && contest.status === 'pending' && !contestStarted && contest.scheduled_start_time) {
+    if (contest && contest.status === 'waiting' && !contestStarted && contest.scheduled_start_time) {
       const startMs = new Date(contest.scheduled_start_time).getTime();
       const updateCountdown = () => {
         const diffMs = startMs - Date.now();
@@ -343,7 +343,7 @@ export default function ContestLayout({ userObj }) {
           {isHost && contest.status === 'active' && (
             <button className="btn btn-danger" onClick={() => setShowEndConfirm(true)} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>End Contest</button>
           )}
-          {isHost && contest.status === 'pending' && (!contest.scheduled_start_time || (scheduledCountdown !== null && scheduledCountdown <= 0)) && (
+          {isHost && contest.status === 'waiting' && (!contest.scheduled_start_time || (scheduledCountdown !== null && scheduledCountdown <= 0)) && (
             <button className="btn btn-primary" onClick={startStandard} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>Start Contest</button>
           )}
         </div>
