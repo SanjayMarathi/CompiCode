@@ -164,7 +164,7 @@ export default function ContestLayout({ userObj }) {
         const diffMs = startMs - Date.now();
         if (diffMs <= 0) {
           if (isHost && !contestStarted) {
-             startStandard();
+             handleHostStart();
           }
           setScheduledCountdown(0);
         } else {
