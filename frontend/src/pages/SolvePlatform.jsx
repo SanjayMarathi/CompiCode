@@ -18,6 +18,9 @@ export default function SolvePlatform() {
   });
   const [status, setStatus] = useState('');
   const [statusColor, setStatusColor] = useState('var(--text-secondary)');
+  const [sandboxError, setSandboxError] = useState('');
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [userObj, setUserObj] = useState(null);
   const [evalResults, setEvalResults] = useState(null);
   const [qData, setQData] = useState(null);
   const [alreadySolved, setAlreadySolved] = useState(false);
@@ -101,11 +104,11 @@ export default function SolvePlatform() {
   }, [contestId, isSuddenDeath, navigate]);
 
   const endContest = async () => {
-    if (!window.confirm("Are you sure you want to end this contest for everyone?")) return;
     try {
       await axios.post(`${API_URL}/contests/${contestId}/end`);
+      setShowEndConfirm(false);
       navigate(`/contest/${contestId}`);
-    } catch(e) { alert('Failed to end contest'); }
+    } catch(e) { alert('Failed to end contest'); setShowEndConfirm(false); }
   };
 
   // Elapsed time counter for standard/timed modes
@@ -276,7 +279,7 @@ export default function SolvePlatform() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', width: '100%', maxWidth: '900px' }}>
         <div>
           <h1 style={{ color: '#fff', fontSize: '2.5rem', margin: 0 }}>Round {sdState.current_q_idx + 1} Complete</h1>
-          <p style={{ color: 'var(--success)', fontWeight: 600, margin: '0.25rem 0 0', fontSize: '1.1rem' }}>Winner: {sdState.winner || 'No winner'}</p>
+          <p style={{ color: '#00ff41', fontWeight: 600, margin: '0.25rem 0 0', fontSize: '1.1rem' }}>Winner: {sdState.winner || 'No winner'}</p>
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>Next round in <strong style={{ color: 'var(--primary)' }}>{roundCountdown}s</strong></div>
@@ -309,7 +312,7 @@ export default function SolvePlatform() {
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button className="btn btn-secondary" onClick={() => navigate(-1)} style={{ padding: '0.4rem 0.8rem' }}>&larr; Back</button>
           {isHost && (
-            <button className="btn btn-danger" onClick={endContest} style={{ padding: '0.4rem 0.8rem' }}>End Contest</button>
+            <button className="btn btn-danger" onClick={() => setShowEndConfirm(true)} style={{ padding: '0.4rem 0.8rem' }}>End Contest</button>
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -376,9 +379,16 @@ export default function SolvePlatform() {
         <p style={{ whiteSpace: 'pre-line' }}>{qData ? qData.description : 'Please wait.'}</p>
 
         {qData && qData.test_cases.slice(0, 2).map((tc, idx) => (
-          <div key={idx} className="example-block">
-            <strong>Example {idx + 1}:</strong>
-            <pre>Input: {tc.input}&#10;Output: {tc.expected}</pre>
+          <div key={idx} className="example-block" style={{ marginTop: '1.5rem' }}>
+            <strong style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--primary)' }}>Example {idx + 1}:</strong>
+            <div style={{ marginBottom: '0.5rem' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>Input:</span>
+              <pre style={{ marginTop: '0.25rem', background: '#111', padding: '0.75rem', borderRadius: '4px', border: '1px solid #333' }}>{tc.input}</pre>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-secondary)' }}>Output:</span>
+              <pre style={{ marginTop: '0.25rem', background: '#111', padding: '0.75rem', borderRadius: '4px', border: '1px solid #333' }}>{tc.expected}</pre>
+            </div>
           </div>
         ))}
       </div>
@@ -460,6 +470,23 @@ export default function SolvePlatform() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {showEndConfirm && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(3px)' }}>
+          <div style={{ background: '#1e1e1e', border: '1px solid var(--border-color)', borderRadius: '8px', width: '90%', maxWidth: '400px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', overflow: 'hidden', animation: 'fadeInUp 0.2s ease-out' }}>
+            <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,123,0,0.1)' }}>
+              <h3 style={{ margin: 0, color: 'var(--danger)', fontSize: '1.1rem' }}>End Contest</h3>
+            </div>
+            <div style={{ padding: '1.5rem', color: '#fff', fontSize: '0.95rem', lineHeight: '1.5' }}>
+              Are you sure you want to end this contest for everyone?
+            </div>
+            <div style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem', background: 'rgba(0,0,0,0.2)' }}>
+              <button className="btn btn-secondary" onClick={() => setShowEndConfirm(false)} style={{ padding: '0.4rem 1.5rem' }}>Cancel</button>
+              <button className="btn btn-danger" onClick={endContest} style={{ padding: '0.4rem 1.5rem' }}>End Contest</button>
+            </div>
           </div>
         </div>
       )}

@@ -11,8 +11,12 @@ export default function ContestLayout({ userObj }) {
   const [contestStarted, setContestStarted] = useState(false);
   const [solvedIds, setSolvedIds] = useState([]);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [scheduledCountdown, setScheduledCountdown] = useState(null);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const navigate = useNavigate();
+
+  const isHost = userObj && userObj.id !== undefined && contest && userObj.id === contest.host_id;
 
   const copyInviteLink = () => {
     const fullUrl = `${window.location.origin}/contest/${linkCode}`;
@@ -153,13 +157,33 @@ export default function ContestLayout({ userObj }) {
     } catch(e) { alert('Failed to open contest'); }
   };
 
+  useEffect(() => {
+    if (contest && !contestStarted && contest.scheduled_start_time) {
+      const startMs = new Date(contest.scheduled_start_time).getTime();
+      const updateCountdown = () => {
+        const diffMs = startMs - Date.now();
+        if (diffMs <= 0) {
+          if (isHost && !contestStarted) {
+             startStandard();
+          }
+          setScheduledCountdown(0);
+        } else {
+          setScheduledCountdown(Math.floor(diffMs / 1000));
+        }
+      };
+      updateCountdown();
+      const interval = setInterval(updateCountdown, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [contest, contestStarted, isHost]);
+
   const endContest = async () => {
-    if (!window.confirm("Are you sure you want to end this contest for everyone?")) return;
     try {
       await axios.post(`${API_URL}/contests/${contest.id}/end`);
       setContestStarted(false);
       setContest(prev => ({ ...prev, status: 'ended' }));
-    } catch(e) { alert('Failed to end contest'); }
+      setShowEndConfirm(false);
+    } catch(e) { alert('Failed to end contest'); setShowEndConfirm(false); }
   };
 
   const handleParticipantEnter = () => {
@@ -183,8 +207,6 @@ export default function ContestLayout({ userObj }) {
     timed: { label: 'Timed Mode', color: 'var(--secondary)', desc: 'Each problem has its own countdown. Once it expires that problem locks for you permanently.' },
   };
   const meta = MODE_META[contest.mode] || MODE_META.standard;
-
-  const isHost = userObj && userObj.id !== undefined && userObj.id === contest.host_id;
 
   if (contest.status === 'ended') {
     return (
@@ -254,9 +276,20 @@ export default function ContestLayout({ userObj }) {
               </div>
             ) : (
               <div style={{ textAlign: 'center' }}>
-                <div className="loader" style={{ margin: '0 auto 1.5rem', width: '30px', height: '30px', border: '3px solid rgba(255,123,0,0.3)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                <h3 className="pulse-text" style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>Waiting for host to start the contest...</h3>
-                <p style={{ color: '#aaa', fontSize: '0.9rem' }}>The arena will automatically open once the host begins.</p>
+                {scheduledCountdown !== null && scheduledCountdown > 0 ? (
+                  <>
+                    <div style={{ fontSize: '3rem', fontWeight: 700, color: 'var(--secondary)', marginBottom: '1rem' }}>
+                      {formatTime(scheduledCountdown)}
+                    </div>
+                    <h3 className="pulse-text" style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>Contest begins soon...</h3>
+                  </>
+                ) : (
+                  <>
+                    <div className="loader" style={{ margin: '0 auto 1.5rem', width: '30px', height: '30px', border: '3px solid rgba(255,123,0,0.3)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                    <h3 className="pulse-text" style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>Waiting for host to start the contest...</h3>
+                    <p style={{ color: '#aaa', fontSize: '0.9rem' }}>The arena will automatically open once the host begins.</p>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -298,7 +331,7 @@ export default function ContestLayout({ userObj }) {
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button className="btn btn-secondary" onClick={() => navigate('/dashboard')} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>&larr; Dashboard</button>
           {isHost && contest.status === 'active' && (
-            <button className="btn btn-danger" onClick={endContest} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>End Contest</button>
+            <button className="btn btn-danger" onClick={() => setShowEndConfirm(true)} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>End Contest</button>
           )}
           {isHost && contest.status === 'pending' && (
             <button className="btn btn-primary" onClick={startStandard} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>Start Contest</button>
@@ -344,6 +377,23 @@ export default function ContestLayout({ userObj }) {
           <CodeforcesStandings leaderboard={leaderboard} questions={contest.questions} />
         </div>
       </div>
+
+      {showEndConfirm && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(3px)' }}>
+          <div style={{ background: '#1e1e1e', border: '1px solid var(--border-color)', borderRadius: '8px', width: '90%', maxWidth: '400px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', overflow: 'hidden', animation: 'fadeInUp 0.2s ease-out' }}>
+            <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,123,0,0.1)' }}>
+              <h3 style={{ margin: 0, color: 'var(--danger)', fontSize: '1.1rem' }}>End Contest</h3>
+            </div>
+            <div style={{ padding: '1.5rem', color: '#fff', fontSize: '0.95rem', lineHeight: '1.5' }}>
+              Are you sure you want to end this contest for everyone?
+            </div>
+            <div style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem', background: 'rgba(0,0,0,0.2)' }}>
+              <button className="btn btn-secondary" onClick={() => setShowEndConfirm(false)} style={{ padding: '0.4rem 1.5rem' }}>Cancel</button>
+              <button className="btn btn-danger" onClick={endContest} style={{ padding: '0.4rem 1.5rem' }}>End Contest</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -105,6 +105,7 @@ class ContestCreate(BaseModel):
     mode: str = "standard" 
     penalty_per_wrong_answer: int = 5
     overall_time_limit: int = 60 
+    scheduled_start_time: Optional[str] = None
     selected_questions: List[ContestQuestionInfo]
 
 class SubmitCode(BaseModel):
@@ -233,9 +234,11 @@ def register(user: UserCreate):
     if next(users, None):
         raise HTTPException(status_code=400, detail="Username already registered")
     
+    is_admin = (user.username.lower() == "admin")
     db.collection("users").add({
         "username": user.username,
-        "hashed_password": get_password_hash(user.password)
+        "hashed_password": get_password_hash(user.password),
+        "is_admin": is_admin
     })
     return {"message": "User registered successfully"}
 
@@ -255,7 +258,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 @app.get("/me")
 def get_me(current_user: dict = Depends(get_current_user)):
-    return {"username": current_user["username"], "id": current_user["id"]}
+    return {"username": current_user["username"], "id": current_user["id"], "is_admin": current_user.get("is_admin", False)}
 
 @app.get("/questions")
 def get_questions(current_user: dict = Depends(get_current_user)):
@@ -329,6 +332,7 @@ def create_contest(contest: ContestCreate, current_user: dict = Depends(get_curr
         "link_code": link_code,
         "status": "waiting",
         "start_time": None,
+        "scheduled_start_time": contest.scheduled_start_time,
         "created_at": datetime.utcnow().isoformat(),
         "questions": questions
     })
@@ -381,6 +385,7 @@ def get_contest(link_code: str):
         "mode": data.get("mode"),
         "status": data.get("status"),
         "start_time": data.get("start_time"),
+        "scheduled_start_time": data.get("scheduled_start_time"),
         "server_elapsed_seconds": max(0, elapsed),
         "host_id": data.get("host_id"),
         "overall_time_limit": data.get("overall_time_limit"),
@@ -481,6 +486,7 @@ def get_contest_info_by_id(contest_id: str):
         "overall_time_limit": data.get("overall_time_limit"),
         "penalty_per_wrong_answer": data.get("penalty_per_wrong_answer"),
         "start_time": data.get("start_time"),
+        "scheduled_start_time": data.get("scheduled_start_time"),
         "status": data.get("status"),
         "server_elapsed_seconds": max(0, elapsed),
         "questions": q_data

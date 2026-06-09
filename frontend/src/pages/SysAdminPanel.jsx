@@ -21,6 +21,7 @@ export default function SysAdminPanel() {
   const [sandboxTesting, setSandboxTesting] = useState(false);
   const [sandboxResults, setSandboxResults] = useState(null);
   const [sandboxError, setSandboxError] = useState('');
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   const loadProblems = async () => {
     try {
@@ -37,6 +38,7 @@ export default function SysAdminPanel() {
     setTestCases([{ input_data: '', expected_output: '' }, { input_data: '', expected_output: '' }]);
     setSandboxCode(boilerplates['cpp']); setSandboxLang('cpp'); setSandboxResults(null); setSandboxError('');
     setShowForm(true);
+    setShowDetailsModal(true);
   };
 
   const openAppEdit = async (p) => {
@@ -48,6 +50,7 @@ export default function SysAdminPanel() {
       setTestCases(res.data.test_cases.map(tc => ({ input_data: tc.input, expected_output: tc.expected })));
       setSandboxCode(boilerplates['cpp']); setSandboxLang('cpp'); setSandboxResults(null); setSandboxError('');
       setShowForm(true);
+      setShowDetailsModal(false);
     } catch {
       alert("Failed to load question details");
     }
@@ -93,134 +96,136 @@ export default function SysAdminPanel() {
     }
   };
 
-  return (
-    <div className="container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <button className="btn btn-secondary" onClick={() => navigate('/dashboard')} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>&larr; Dashboard</button>
-          <div>
-            <h2 style={{ margin: 0 }}>Global Problem Bank</h2>
-            <p style={{ color: 'var(--text-secondary)', margin: '0.5rem 0 0', maxWidth: '700px', lineHeight: 1.5 }}>
-              Manage the official repository of coding challenges. Problems added here will be available to all contest hosts when they are creating their own custom contests.
-            </p>
+  if (showForm) {
+    return (
+      <div className="solve-container">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button className="btn btn-secondary" onClick={() => setShowForm(false)} style={{ padding: '0.4rem 0.8rem' }}>&larr; Back to Problems</button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <button className="btn btn-secondary" onClick={() => setShowDetailsModal(true)} style={{ padding: '0.4rem 0.8rem' }}>Edit Details & Testcases</button>
+            <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ padding: '0.4rem 0.8rem' }}>{saving ? 'Saving...' : 'Save Problem'}</button>
           </div>
         </div>
-        <button className="btn btn-primary" onClick={openNew} style={{ padding: '0.5rem 1.25rem' }}>+ New Problem</button>
-      </div>
 
-      <div className="glass-panel">
-        {problems.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-            <p>No problems in the bank yet.</p>
-            <button className="btn btn-primary" onClick={openNew} style={{ marginTop: '1rem' }}>Add Your First Problem</button>
+        <div className="problem-title">
+          <h1 style={{ margin: 0 }}>{newQTitle || 'Untitled Problem'}</h1>
+        </div>
+        
+        <div className="problem-desc">
+          <p style={{ whiteSpace: 'pre-line' }}>{newQDesc || 'No description provided.'}</p>
+          {testCases.slice(0, 2).map((tc, idx) => (
+            <div key={idx} className="example-block" style={{ marginTop: '1.5rem' }}>
+              <strong style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--primary)' }}>Example {idx + 1}:</strong>
+              <div style={{ marginBottom: '0.5rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Input:</span>
+                <pre style={{ marginTop: '0.25rem', background: '#111', padding: '0.75rem', borderRadius: '4px', border: '1px solid #333' }}>{tc.input_data}</pre>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-secondary)' }}>Output:</span>
+                <pre style={{ marginTop: '0.25rem', background: '#111', padding: '0.75rem', borderRadius: '4px', border: '1px solid #333' }}>{tc.expected_output}</pre>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="editor-wrapper">
+          <div className="editor-toolbar">
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+              <select className="form-input" value={sandboxLang} onChange={e => {setSandboxLang(e.target.value); setSandboxCode(boilerplates[e.target.value]);}} style={{ width: 'auto', background: '#333', border: '1px solid #444', color: '#ccc', padding: '0.4rem 1rem', borderRadius: '4px' }}>
+                <option value="cpp">C++</option>
+                <option value="python">Python</option>
+                <option value="java">Java</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <span style={{ fontSize: '1rem', color: sandboxError ? 'var(--danger)' : 'var(--text-secondary)', marginRight: '1.5rem', fontWeight: 700 }}>
+                {sandboxError}
+              </span>
+              <button className="btn btn-primary" onClick={runSandbox} disabled={sandboxTesting} style={{ padding: '0.5rem 2.5rem', borderRadius: '0' }}>
+                {sandboxTesting ? 'Evaluating...' : 'Run Tests'}
+              </button>
+            </div>
           </div>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <th style={{ textAlign: 'left', padding: '0.6rem 1rem', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.85rem' }}>#</th>
-                <th style={{ textAlign: 'left', padding: '0.6rem 1rem', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.85rem' }}>Title</th>
-                <th style={{ textAlign: 'left', padding: '0.6rem 1rem', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.85rem' }}>Description</th>
-                <th style={{ textAlign: 'left', padding: '0.6rem 1rem', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.85rem' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {problems.map((p, i) => (
-                <tr key={p.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                  <td style={{ padding: '0.8rem 1rem', color: '#666', fontSize: '0.85rem' }}>{i + 1}</td>
-                  <td style={{ padding: '0.8rem 1rem', color: '#fff', fontWeight: 600 }}>{p.title}</td>
-                  <td style={{ padding: '0.8rem 1rem', color: 'var(--text-secondary)', fontSize: '0.85rem', maxWidth: '400px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.description}</td>
-                  <td style={{ padding: '0.8rem 1rem' }}><button type="button" className="btn btn-secondary" style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }} onClick={() => openAppEdit(p)}>Edit</button></td>
-                </tr>
+          <div style={{ height: '400px', background: 'var(--editor-bg)' }}>
+            <Editor
+              height="100%"
+              theme="vs-dark"
+              language={sandboxLang === 'cpp' ? 'cpp' : sandboxLang}
+              value={sandboxCode}
+              onChange={val => setSandboxCode(val)}
+              options={{ minimap: { enabled: false }, fontSize: 15, wordWrap: 'on', padding: { top: 16 } }}
+            />
+          </div>
+        </div>
+
+        <div className="testcase-panel">
+          <div className="testcase-header">Console Output</div>
+          <div className="testcase-body">
+            {!sandboxResults && !sandboxTesting && <div style={{ color: '#555' }}>Write code and click Run Tests to test your problem cases...</div>}
+            {sandboxTesting && !sandboxResults && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem' }}>
+                <div style={{ width: '24px', height: '24px', border: '3px solid rgba(255,123,0,0.3)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite', flexShrink: 0 }}></div>
+                <span style={{ color: 'var(--primary)', fontWeight: 600 }}>Evaluating your code...</span>
+              </div>
+            )}
+            {sandboxResults && sandboxResults.map((res, i) => {
+               let sanitizedActual = res.actual || 'No output';
+               if (sanitizedActual.includes('File "') && sanitizedActual.includes('line')) {
+                 const lines = sanitizedActual.split('\n').map(l => l.trim()).filter(l => l);
+                 sanitizedActual = lines[lines.length - 1] || 'Runtime/Syntax Error';
+               }
+               return (
+                 <div key={i} className="test-block" style={{ borderLeft: `4px solid ${res.passed ? 'var(--success)' : 'var(--danger)'}` }}>
+                   <div style={{ fontWeight: 700, color: res.passed ? 'var(--success)' : 'var(--danger)', marginBottom: '0.8rem', fontSize: '0.9rem' }}>
+                     Testcase {i + 1} {res.passed ? 'Passed' : 'Failed'}
+                   </div>
+                   <div style={{ color: '#ccc', fontFamily: 'Consolas, monospace', fontSize: '0.85rem', lineHeight: '1.6' }}>
+                     <div style={{ marginBottom: '0.5rem' }}><span style={{ color: '#888' }}>Input:</span> <span style={{ background: '#111', padding: '1px 4px' }}>{res.input}</span></div>
+                     <div style={{ marginBottom: '0.5rem' }}><span style={{ color: '#888' }}>Expected:</span> <span style={{ background: '#111', padding: '1px 4px' }}>{res.expected}</span></div>
+                     <div><span style={{ color: '#888' }}>Actual:</span> <span style={{ background: '#111', padding: '1px 4px' }}>{sanitizedActual}</span></div>
+                   </div>
+                 </div>
+               );
+            })}
+          </div>
+        </div>
+
+        {showDetailsModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+            <div style={{ background: '#1e1e1e', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.5rem', width: '100%', maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto' }}>
+              <h3 style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>Edit Problem Details</h3>
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                <label style={{ fontSize: '1.1rem', color: '#fff' }}>Problem Title</label>
+                <input required className="form-input" placeholder="e.g. Reverse a Linked List" value={newQTitle} onChange={e => setNewQTitle(e.target.value)} style={{ padding: '0.8rem', fontSize: '1rem' }} />
+              </div>
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                <label style={{ fontSize: '1.1rem', color: '#fff' }}>Problem Statement</label>
+                <textarea required className="form-input" rows="5" placeholder="Full problem description including input/output format and constraints..." value={newQDesc} onChange={e => setNewQDesc(e.target.value)} style={{ padding: '0.8rem', fontFamily: 'inherit', fontSize: '0.95rem' }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <label style={{ color: 'var(--text-secondary)' }}>Test Cases (min 2)</label>
+                <button type="button" className="btn btn-secondary" onClick={() => setTestCases([...testCases, { input_data: '', expected_output: '' }])} style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}>+ Row</button>
+              </div>
+              {testCases.map((tc, idx) => (
+                <div key={idx} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'flex-start' }}>
+                  <span style={{ color: '#666', fontSize: '0.8rem', minWidth: '18px', marginTop: '0.5rem' }}>{idx + 1}.</span>
+                  <textarea className="form-input" rows="2" placeholder="Input (empty if none)" value={tc.input_data} onChange={e => { const n = [...testCases]; n[idx].input_data = e.target.value; setTestCases(n); }} style={{ flex: 1, fontFamily: 'monospace', resize: 'vertical' }} />
+                  <textarea required className="form-input" rows="2" placeholder="Expected output" value={tc.expected_output} onChange={e => { const n = [...testCases]; n[idx].expected_output = e.target.value; setTestCases(n); }} style={{ flex: 1, fontFamily: 'monospace', resize: 'vertical' }} />
+                  {idx >= 2 && <button type="button" className="btn btn-danger" onClick={() => setTestCases(testCases.filter((_, i) => i !== idx))} style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem', marginTop: '0.3rem' }}>X</button>}
+                </div>
               ))}
-            </tbody>
-          </table>
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '1.25rem' }}>
+                <button type="button" className="btn btn-primary" onClick={() => setShowDetailsModal(false)} style={{ flex: 1 }}>Done</button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
+    );
+  }
 
-      {showForm && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-          <div style={{ background: '#1e1e1e', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.5rem', width: '100%', maxWidth: '1200px', maxHeight: '90vh', display: 'flex', gap: '2rem' }}>
-            <div style={{ flex: 1, overflowY: 'auto', paddingRight: '0.5rem' }}>
-              <h3 style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>Add Problem to UI</h3>
-              <form onSubmit={handleSave}>
-                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                  <label style={{ fontSize: '1.1rem', color: '#fff' }}>Problem Title</label>
-                  <input required className="form-input" placeholder="e.g. Reverse a Linked List" value={newQTitle} onChange={e => setNewQTitle(e.target.value)} style={{ padding: '0.8rem', fontSize: '1rem' }} />
-                </div>
-                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                  <label style={{ fontSize: '1.1rem', color: '#fff' }}>Problem Statement</label>
-                  <textarea required className="form-input" rows="5" placeholder="Full problem description including input/output format and constraints..." value={newQDesc} onChange={e => setNewQDesc(e.target.value)} style={{ padding: '0.8rem', fontFamily: 'inherit', fontSize: '0.95rem' }} />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <label style={{ color: 'var(--text-secondary)' }}>Test Cases (min 2)</label>
-                  <button type="button" className="btn btn-secondary" onClick={() => setTestCases([...testCases, { input_data: '', expected_output: '' }])} style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}>+ Row</button>
-                </div>
-                {testCases.map((tc, idx) => (
-                  <div key={idx} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'flex-start' }}>
-                    <span style={{ color: '#666', fontSize: '0.8rem', minWidth: '18px', marginTop: '0.5rem' }}>{idx + 1}.</span>
-                    <textarea className="form-input" rows="2" placeholder="Input (empty if none)" value={tc.input_data} onChange={e => { const n = [...testCases]; n[idx].input_data = e.target.value; setTestCases(n); }} style={{ flex: 1, fontFamily: 'monospace', resize: 'vertical' }} />
-                    <textarea required className="form-input" rows="2" placeholder="Expected output" value={tc.expected_output} onChange={e => { const n = [...testCases]; n[idx].expected_output = e.target.value; setTestCases(n); }} style={{ flex: 1, fontFamily: 'monospace', resize: 'vertical' }} />
-                    {idx >= 2 && <button type="button" className="btn btn-danger" onClick={() => setTestCases(testCases.filter((_, i) => i !== idx))} style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem', marginTop: '0.3rem' }}>X</button>}
-                  </div>
-                ))}
-                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.25rem' }}>
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)} style={{ flex: 1 }}>Cancel</button>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 2 }} disabled={saving}>{saving ? 'Saving...' : 'Save to UI'}</button>
-                </div>
-              </form>
-            </div>
-            
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--border-color)', paddingLeft: '2rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
-                <h3 style={{ margin: 0 }}>Sandbox Testing</h3>
-                <select className="form-input" value={sandboxLang} onChange={e => {setSandboxLang(e.target.value); setSandboxCode(boilerplates[e.target.value]);}} style={{ width: 'auto', padding: '0.3rem 0.8rem', background: '#333' }}>
-                  <option value="cpp">C++</option>
-                  <option value="python">Python</option>
-                  <option value="java">Java</option>
-                </select>
-              </div>
-              
-              <div style={{ flex: 1, border: '1px solid #333', minHeight: '300px' }}>
-                <Editor
-                  height="100%"
-                  theme="vs-dark"
-                  language={sandboxLang === 'cpp' ? 'cpp' : sandboxLang}
-                  value={sandboxCode}
-                  onChange={val => setSandboxCode(val)}
-                  options={{ minimap: { enabled: false }, fontSize: 14 }}
-                />
-              </div>
-              
-              <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: sandboxError ? 'var(--danger)' : 'var(--text-secondary)' }}>{sandboxError || (sandboxTesting ? 'Evaluating...' : 'Write code to test your problem cases')}</span>
-                <button type="button" className="btn btn-primary" onClick={runSandbox} disabled={sandboxTesting}>
-                  {sandboxTesting ? 'Running...' : 'Run Tests'}
-                </button>
-              </div>
-              
-              {sandboxResults && (
-                <div style={{ marginTop: '1rem', background: '#111', padding: '1rem', borderRadius: '4px', maxHeight: '200px', overflowY: 'auto' }}>
-                  {sandboxResults.map((res, i) => {
-                     let sanitizedActual = res.actual || 'No output';
-                     if (sanitizedActual.includes('File "') && sanitizedActual.includes('line')) {
-                       const lines = sanitizedActual.split('\n').map(l => l.trim()).filter(l => l);
-                       sanitizedActual = lines[lines.length - 1] || 'Runtime/Syntax Error';
-                     }
-                     return (
-                       <div key={i} style={{ borderLeft: `3px solid ${res.passed ? 'var(--success)' : 'var(--danger)'}`, paddingLeft: '0.5rem', marginBottom: '0.5rem', fontSize: '0.85rem' }}>
-                         <div style={{ color: res.passed ? 'var(--success)' : 'var(--danger)', fontWeight: 'bold' }}>Testcase {i + 1}: {res.passed ? 'Passed' : 'Failed'}</div>
-                         <div style={{ color: '#aaa', marginTop: '0.2rem', fontFamily: 'monospace' }}>Expected: {res.expected}</div>
-                         <div style={{ color: '#aaa', fontFamily: 'monospace' }}>Actual: {sanitizedActual}</div>
-                       </div>
-                     );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return (
+    <div className="container">
 }
