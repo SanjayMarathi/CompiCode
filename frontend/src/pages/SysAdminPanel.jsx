@@ -11,6 +11,9 @@ export default function SysAdminPanel() {
   const [editId, setEditId] = useState(null);
   const [newQTitle, setNewQTitle] = useState('');
   const [newQDesc, setNewQDesc] = useState('');
+  const [newQInputFmt, setNewQInputFmt] = useState('');
+  const [newQOutputFmt, setNewQOutputFmt] = useState('');
+  const [newQConstraints, setNewQConstraints] = useState('');
   const [testCases, setTestCases] = useState([
     { input_data: '', expected_output: '' },
     { input_data: '', expected_output: '' }
@@ -34,6 +37,7 @@ export default function SysAdminPanel() {
   const openNew = () => {
     setEditId(null);
     setNewQTitle(''); setNewQDesc('');
+    setNewQInputFmt(''); setNewQOutputFmt(''); setNewQConstraints('');
     setTestCases([{ input_data: '', expected_output: '' }, { input_data: '', expected_output: '' }]);
     setSandboxCode(boilerplates['cpp']); setSandboxLang('cpp'); setSandboxResults(null); setSandboxError('');
     setShowForm(true);
@@ -44,7 +48,35 @@ export default function SysAdminPanel() {
       const res = await axios.get(`${API_URL}/questions/${p.id}`);
       setEditId(p.id);
       setNewQTitle(res.data.title);
-      setNewQDesc(res.data.description);
+      
+      let desc = res.data.description || '';
+      let inputFmt = '';
+      let outputFmt = '';
+      let constraints = '';
+
+      const inputSplit = desc.split('### Input Format');
+      if (inputSplit.length > 1) {
+        desc = inputSplit[0].trim();
+        const outputSplit = inputSplit[1].split('### Output Format');
+        if (outputSplit.length > 1) {
+          inputFmt = outputSplit[0].trim();
+          const constraintsSplit = outputSplit[1].split('### Constraints');
+          if (constraintsSplit.length > 1) {
+            outputFmt = constraintsSplit[0].trim();
+            constraints = constraintsSplit[1].trim();
+          } else {
+            outputFmt = outputSplit[1].trim();
+          }
+        } else {
+          inputFmt = inputSplit[1].trim();
+        }
+      }
+
+      setNewQDesc(desc);
+      setNewQInputFmt(inputFmt);
+      setNewQOutputFmt(outputFmt);
+      setNewQConstraints(constraints);
+      
       setTestCases(res.data.test_cases.map(tc => ({ input_data: tc.input, expected_output: tc.expected })));
       setSandboxCode(boilerplates['cpp']); setSandboxLang('cpp'); setSandboxResults(null); setSandboxError('');
       setShowForm(true);
@@ -68,10 +100,15 @@ export default function SysAdminPanel() {
     if (testCases.length < 2) return alert('Must have at least 2 test cases.');
     setSaving(true);
     try {
+      let combinedDesc = newQDesc.trim();
+      if (newQInputFmt.trim()) combinedDesc += `\n\n### Input Format\n${newQInputFmt.trim()}`;
+      if (newQOutputFmt.trim()) combinedDesc += `\n\n### Output Format\n${newQOutputFmt.trim()}`;
+      if (newQConstraints.trim()) combinedDesc += `\n\n### Constraints\n${newQConstraints.trim()}`;
+      
       if (editId) {
-        await axios.put(`${API_URL}/questions/${editId}`, { title: newQTitle, description: newQDesc, is_global: true, test_cases: testCases });
+        await axios.put(`${API_URL}/questions/${editId}`, { title: newQTitle, description: combinedDesc, is_global: true, test_cases: testCases });
       } else {
-        await axios.post(`${API_URL}/questions`, { title: newQTitle, description: newQDesc, is_global: true, test_cases: testCases });
+        await axios.post(`${API_URL}/questions`, { title: newQTitle, description: combinedDesc, is_global: true, test_cases: testCases });
       }
       setShowForm(false);
       loadProblems();
@@ -164,8 +201,20 @@ export default function SysAdminPanel() {
                   <input required className="form-input" placeholder="e.g. Reverse a Linked List" value={newQTitle} onChange={e => setNewQTitle(e.target.value)} style={{ padding: '0.8rem', fontSize: '1rem' }} />
                 </div>
                 <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                  <label style={{ fontSize: '1.1rem', color: '#fff' }}>Problem Statement</label>
-                  <textarea required className="form-input" rows="5" placeholder="Full problem description including input/output format and constraints..." value={newQDesc} onChange={e => setNewQDesc(e.target.value)} style={{ padding: '0.8rem', fontFamily: 'inherit', fontSize: '0.95rem' }} />
+                  <label style={{ fontSize: '1.1rem', color: '#fff' }}>Description</label>
+                  <textarea required className="form-input" rows="4" placeholder="Detailed problem statement..." value={newQDesc} onChange={e => setNewQDesc(e.target.value)} style={{ padding: '0.8rem', fontFamily: 'inherit', fontSize: '0.95rem' }} />
+                </div>
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ fontSize: '1.1rem', color: '#fff' }}>Input Format</label>
+                  <textarea className="form-input" rows="2" placeholder="e.g. The first line contains an integer N..." value={newQInputFmt} onChange={e => setNewQInputFmt(e.target.value)} style={{ padding: '0.8rem', fontFamily: 'inherit', fontSize: '0.95rem' }} />
+                </div>
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ fontSize: '1.1rem', color: '#fff' }}>Output Format</label>
+                  <textarea className="form-input" rows="2" placeholder="e.g. Print N space-separated integers..." value={newQOutputFmt} onChange={e => setNewQOutputFmt(e.target.value)} style={{ padding: '0.8rem', fontFamily: 'inherit', fontSize: '0.95rem' }} />
+                </div>
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ fontSize: '1.1rem', color: '#fff' }}>Constraints</label>
+                  <textarea className="form-input" rows="2" placeholder="e.g. 1 <= N <= 10^5" value={newQConstraints} onChange={e => setNewQConstraints(e.target.value)} style={{ padding: '0.8rem', fontFamily: 'inherit', fontSize: '0.95rem' }} />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                   <label style={{ color: 'var(--text-secondary)' }}>Test Cases (min 2)</label>

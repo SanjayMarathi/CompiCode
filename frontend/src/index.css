@@ -291,8 +291,6 @@ a:hover {
 }
 .testcase-body {
   padding: 1.5rem;
-  max-height: 300px;
-  overflow-y: auto;
 }
 .test-block {
   background: rgba(255,255,255,0.02);
