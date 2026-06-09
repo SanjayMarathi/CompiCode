@@ -427,17 +427,33 @@ async def start_sudden_death_contest(contest_id: str):
     state["active_question_id"] = q_id
     await manager.set_state(contest_id, state)
     asyncio.create_task(global_active_timer(contest_id, 0))
+    
+    doc.reference.update({
+        "status": "active",
+        "start_time": datetime.utcnow().isoformat() + "Z"
+    })
     return {"success": True}
 
 @app.post("/contests/{contest_id}/open")
-async def open_contest_for_standard(contest_id: str):
-    doc_ref = db.collection("contests").document(contest_id)
-    if doc_ref.get().exists:
-        doc_ref.update({
-            "status": "active",
-            "start_time": datetime.utcnow().isoformat()
-        })
-    return {"success": True, "message": "Contest opened"}
+def open_standard_contest(contest_id: str, current_user: dict = Depends(get_current_user)):
+    doc = db.collection("contests").document(contest_id).get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Contest not found")
+        
+    data = doc.to_dict()
+    if data.get("host_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Only host can open the contest")
+        
+    if data.get("status") == "active":
+        return {"message": "Already active"}
+        
+    doc.reference.update({
+        "status": "active",
+        "start_time": datetime.utcnow().isoformat() + "Z"
+    })
+    return {"success": True, "message": "Contest opened successfully"}
+
+
 
 @app.post("/contests/{contest_id}/end")
 async def end_contest(contest_id: str):
@@ -550,6 +566,9 @@ async def submit_code(submission: SubmitCode, current_user: dict = Depends(get_c
         
     if next(already_passed, None):
         return {"passed": True, "already_solved": True, "results": [], "message": "You already solved this question!"}
+
+    if contest.get("status") == "waiting":
+        return {"passed": False, "results": [], "error": "This contest has not started yet."}
 
     if contest.get("status") != "active":
         return {"passed": False, "results": [], "error": "This contest has ended. Submissions are no longer accepted."}
