@@ -20,7 +20,7 @@ export default function AuthPage({ onLogin }) {
         localStorage.setItem('token', res.data.access_token);
         setAuthToken(res.data.access_token);
         const meRes = await axios.get(`${API_URL}/me`);
-        onLogin({ username: meRes.data.username, id: meRes.data.id });
+        onLogin({ username: meRes.data.username, id: meRes.data.id, is_admin: meRes.data.is_admin });
         // Redirect to the page they were trying to reach before login
         const redirectTo = sessionStorage.getItem('redirectAfterLogin') || '/';
         sessionStorage.removeItem('redirectAfterLogin');

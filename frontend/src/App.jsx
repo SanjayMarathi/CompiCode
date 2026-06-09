@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_URL, setAuthToken } from './config';
 
@@ -73,12 +73,12 @@ export default function App() {
       </nav>
       
       <Routes>
-        <Route path="/auth" element={<AuthPage onLogin={setUser}/>} />
+        <Route path="/auth" element={user ? <Navigate to="/dashboard" /> : <AuthPage onLogin={setUser}/>} />
         <Route path="/" element={user ? <Dashboard /> : <AuthPage onLogin={setUser}/>} />
         <Route path="/dashboard" element={user ? <Dashboard /> : <AuthPage onLogin={setUser}/>} />
         <Route path="/host" element={user ? <HostPanel /> : <AuthPage onLogin={setUser}/>} />
-        <Route path="/admin" element={user ? (user.is_admin ? <SysAdminPanel /> : <AuthRequired />) : <AuthPage onLogin={setUser}/>} />
-        <Route path="/sysadmin/problemset" element={user ? (user.is_admin ? <SysAdminPanel /> : <AuthRequired />) : <AuthPage onLogin={setUser}/>} />
+        <Route path="/admin" element={user ? (user.is_admin ? <SysAdminPanel /> : <Navigate to="/dashboard" />) : <AuthPage onLogin={setUser}/>} />
+        <Route path="/sysadmin/problemset" element={user ? (user.is_admin ? <SysAdminPanel /> : <Navigate to="/dashboard" />) : <AuthPage onLogin={setUser}/>} />
         <Route path="/contest/:linkCode" element={user ? <ContestLayout userObj={user} /> : <AuthRequired />} />
         <Route path="/solve/:contestId/:questionId" element={user ? <SolvePlatform /> : <AuthRequired />} />
       </Routes>
