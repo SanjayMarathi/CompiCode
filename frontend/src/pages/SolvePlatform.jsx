@@ -456,32 +456,52 @@ export default function SolvePlatform() {
                 <span style={{ color: 'var(--primary)', fontWeight: 600 }}>Evaluating your submission...</span>
               </div>
             )}
-            {evalResults && evalResults.map((res, i) => {
-              // Show error if it exists, otherwise actual output. Don't hide tracebacks entirely because users need to debug.
-              let outputToDisplay = res.error ? res.error : (res.actual || 'No output');
-              
-              return (
-                <div key={i} className="test-block" style={{ borderLeft: `4px solid ${res.passed ? 'var(--success)' : 'var(--danger)'}` }}>
-                  <div style={{ fontWeight: 700, color: res.passed ? 'var(--success)' : 'var(--danger)', marginBottom: '0.8rem', fontSize: '0.9rem' }}>
-                    Testcase {i + 1} {res.passed ? 'Accepted' : (res.error ? 'Compilation/Runtime Error' : 'Wrong Answer')}
+            {evalResults && (
+              <>
+                {evalResults.map((res, i) => {
+                  const isHidden = i >= 2;
+                  
+                  return (
+                    <div key={i} className="test-block" style={{ borderLeft: `4px solid ${res.passed ? 'var(--success)' : 'var(--danger)'}` }}>
+                      <div style={{ fontWeight: 700, color: res.passed ? 'var(--success)' : 'var(--danger)', marginBottom: isHidden ? 0 : '0.8rem', fontSize: '0.9rem' }}>
+                        Testcase {i + 1} {isHidden ? '(Hidden) ' : ''}{res.passed ? 'Accepted' : (res.error ? 'Error' : 'Wrong Answer')}
+                      </div>
+                      {!isHidden && (
+                        <div style={{ color: '#ccc', fontFamily: 'Consolas, monospace', fontSize: '0.85rem', lineHeight: '1.6' }}>
+                          <div style={{ marginBottom: '0.75rem' }}>
+                            <span style={{ color: '#888', display: 'block', marginBottom: '0.25rem' }}>Input:</span>
+                            <pre style={{ margin: 0, background: '#111', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace' }}>{res.input}</pre>
+                          </div>
+                          <div style={{ marginBottom: '0.75rem' }}>
+                            <span style={{ color: '#888', display: 'block', marginBottom: '0.25rem' }}>Expected:</span>
+                            <pre style={{ margin: 0, background: '#111', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace' }}>{res.expected}</pre>
+                          </div>
+                          {!res.error && (
+                            <div>
+                              <span style={{ color: '#888', display: 'block', marginBottom: '0.25rem' }}>Actual:</span>
+                              <pre style={{ margin: 0, background: '#111', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace' }}>{res.actual || 'No output'}</pre>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {evalResults.some(r => r.error) && (
+                  <div className="test-block" style={{ borderLeft: '4px solid var(--danger)', marginTop: '1rem' }}>
+                    <div style={{ fontWeight: 700, color: 'var(--danger)', marginBottom: '0.8rem', fontSize: '0.9rem' }}>
+                      Compilation / Runtime Error Details
+                    </div>
+                    <div style={{ color: '#ccc', fontFamily: 'Consolas, monospace', fontSize: '0.85rem', lineHeight: '1.6' }}>
+                      <pre style={{ margin: 0, background: '#111', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace' }}>
+                        {evalResults.find(r => r.error).error}
+                      </pre>
+                    </div>
                   </div>
-                  <div style={{ color: '#ccc', fontFamily: 'Consolas, monospace', fontSize: '0.85rem', lineHeight: '1.6' }}>
-                    <div style={{ marginBottom: '0.75rem' }}>
-                      <span style={{ color: '#888', display: 'block', marginBottom: '0.25rem' }}>Input:</span>
-                      <pre style={{ margin: 0, background: '#111', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace' }}>{res.input}</pre>
-                    </div>
-                    <div style={{ marginBottom: '0.75rem' }}>
-                      <span style={{ color: '#888', display: 'block', marginBottom: '0.25rem' }}>Expected:</span>
-                      <pre style={{ margin: 0, background: '#111', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace' }}>{res.expected}</pre>
-                    </div>
-                    <div>
-                      <span style={{ color: res.error ? 'var(--danger)' : '#888', display: 'block', marginBottom: '0.25rem' }}>{res.error ? 'Error Details:' : 'Actual:'}</span>
-                      <pre style={{ margin: 0, background: '#111', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace' }}>{outputToDisplay}</pre>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                )}
+              </>
+            )}
           </div>
         </div>
       )}
