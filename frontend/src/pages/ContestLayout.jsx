@@ -67,15 +67,26 @@ export default function ContestLayout({ userObj }) {
     return () => clearInterval(interval);
   }, [contest, contestStarted, linkCode, userObj]);
 
-  // Auto-refresh leaderboard every 3s
+  // Auto-refresh leaderboard and check if contest ended every 3s
   useEffect(() => {
-    if (!contest) return;
+    if (!contest || contest.status === 'ended') return;
     const interval = setInterval(() => {
       fetchLeaderboard(contest.id);
       fetchMySolved(contest.id);
+      
+      // Also check if the host has ended the contest
+      axios.get(`${API_URL}/contests/${linkCode}`).then(res => {
+        if (res.data.status === 'ended') {
+          setContest(res.data);
+          setContestStarted(false);
+        } else if (res.data.status === 'active' && !contestStarted) {
+          setContest(res.data);
+          setContestStarted(true);
+        }
+      }).catch(() => {});
     }, 3000);
     return () => clearInterval(interval);
-  }, [contest]);
+  }, [contest, contestStarted, linkCode]);
 
   // Global contest timer (for standard and timed modes overall)
   useEffect(() => {
