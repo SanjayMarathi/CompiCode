@@ -228,4 +228,41 @@ export default function SysAdminPanel() {
 
   return (
     <div className="container">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <h2 style={{ margin: 0 }}>Global Problem Bank</h2>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button className="btn btn-secondary" onClick={() => navigate('/dashboard')} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>&larr; Dashboard</button>
+          <button className="btn btn-primary" onClick={openNew}>+ New Problem</button>
+        </div>
+      </div>
+      
+      <div className="glass-panel">
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+              <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>ID</th>
+              <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Title</th>
+              <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {problems.map((p, i) => (
+              <tr key={p.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                <td style={{ padding: '1rem', color: '#888' }}>{p.id.slice(0, 8)}</td>
+                <td style={{ padding: '1rem', fontWeight: 600 }}>{p.title}</td>
+                <td style={{ padding: '1rem' }}>
+                  <button className="btn btn-secondary" onClick={() => openAppEdit(p)} style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem' }}>Edit</button>
+                </td>
+              </tr>
+            ))}
+            {problems.length === 0 && (
+              <tr>
+                <td colSpan="3" style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>No global problems found.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
