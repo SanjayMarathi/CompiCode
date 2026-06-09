@@ -544,6 +544,10 @@ async def sandbox_test(req: SandboxTestRequest, current_user: dict = Depends(get
             )
             data = response.json()
             eval_results = data.get("results", [])
+            for i, res in enumerate(eval_results):
+                if i < len(req.test_cases):
+                    res["input"] = req.test_cases[i].get("input_data", "")
+                    res["expected"] = req.test_cases[i].get("expected_output", "")
     except httpx.TimeoutException:
         return {"passed": False, "results": [], "error": "Execution timed out (Server unresponsive)"}
     except Exception as e:
@@ -612,6 +616,10 @@ async def submit_code(submission: SubmitCode, current_user: dict = Depends(get_c
             )
             data = response.json()
             eval_results = data.get("results", [])
+            for i, res in enumerate(eval_results):
+                if i < len(test_cases):
+                    res["input"] = test_cases[i].get("input_data", "")
+                    res["expected"] = test_cases[i].get("expected_output", "")
     except httpx.TimeoutException:
         return {"passed": False, "results": [], "error": "Executor timed out. Please try again."}
     except Exception as e:
