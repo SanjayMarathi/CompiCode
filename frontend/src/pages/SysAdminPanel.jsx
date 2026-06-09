@@ -53,6 +53,16 @@ export default function SysAdminPanel() {
     }
   };
 
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this problem?")) return;
+    try {
+      await axios.delete(`${API_URL}/questions/${id}`);
+      loadProblems();
+    } catch {
+      alert("Failed to delete problem");
+    }
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     if (testCases.length < 2) return alert('Must have at least 2 test cases.');
@@ -130,7 +140,12 @@ export default function SysAdminPanel() {
                   <td style={{ padding: '0.8rem 1rem', color: '#666', fontSize: '0.85rem' }}>{i + 1}</td>
                   <td style={{ padding: '0.8rem 1rem', color: '#fff', fontWeight: 600 }}>{p.title}</td>
                   <td style={{ padding: '0.8rem 1rem', color: 'var(--text-secondary)', fontSize: '0.85rem', maxWidth: '400px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.description}</td>
-                  <td style={{ padding: '0.8rem 1rem' }}><button type="button" className="btn btn-secondary" style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }} onClick={() => openAppEdit(p)}>Edit</button></td>
+                  <td style={{ padding: '0.8rem 1rem' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button type="button" className="btn btn-secondary" style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }} onClick={() => openAppEdit(p)}>Edit</button>
+                      <button type="button" className="btn btn-danger" style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }} onClick={() => handleDelete(p.id)}>Delete</button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

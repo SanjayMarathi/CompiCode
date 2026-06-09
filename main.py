@@ -310,6 +310,15 @@ def get_single_question(q_id: str):
         "test_cases": [{"input": tc.get("input_data"), "expected": tc.get("expected_output")} for tc in data.get("test_cases", [])]
     }
 
+@app.delete("/questions/{q_id}")
+def delete_question(q_id: str, current_user: dict = Depends(get_current_user)):
+    doc_ref = db.collection("questions").document(q_id)
+    if not doc_ref.get().exists:
+        raise HTTPException(status_code=404, detail="Question not found")
+    
+    doc_ref.delete()
+    return {"message": "Question deleted successfully"}
+
 @app.post("/contests")
 def create_contest(contest: ContestCreate, current_user: dict = Depends(get_current_user)):
     link_code = str(uuid.uuid4())[:8]

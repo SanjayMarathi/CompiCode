@@ -12,6 +12,7 @@ import HostPanel from './pages/HostPanel';
 import SysAdminPanel from './pages/SysAdminPanel';
 import ContestLayout from './pages/ContestLayout';
 import SolvePlatform from './pages/SolvePlatform';
+import NotFound from './pages/NotFound';
 
 import './App.css';
 
@@ -81,6 +82,7 @@ export default function App() {
         <Route path="/sysadmin/problemset" element={user ? (user.is_admin ? <SysAdminPanel /> : <Navigate to="/dashboard" />) : <AuthPage onLogin={setUser}/>} />
         <Route path="/contest/:linkCode" element={user ? <ContestLayout userObj={user} /> : <AuthRequired />} />
         <Route path="/solve/:contestId/:questionId" element={user ? <SolvePlatform /> : <AuthRequired />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
       <Footer />
 
