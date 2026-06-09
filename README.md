@@ -1,3 +1,12 @@
+---
+title: CompiCode Arena
+emoji: 🏟️
+colorFrom: red
+colorTo: blue
+sdk: docker
+pinned: false
+---
+
 <div align="center">
   <h1>🏟️ CompiCode Arena</h1>
   <p><b>A real-time, highly-interactive competitive programming platform featuring multiple dynamic contest modes, automated code execution, and live leaderboards.</b></p>

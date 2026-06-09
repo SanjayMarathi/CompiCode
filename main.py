@@ -334,8 +334,11 @@ def get_contest(link_code: str):
     contests = db.collection("contests").where(filter=FieldFilter("link_code", "==", link_code)).limit(1).stream()
     contest_doc = next(contests, None)
     if not contest_doc:
-        raise HTTPException(status_code=404, detail="Contest not found")
-        
+        doc = db.collection("contests").document(link_code).get()
+        if doc.exists:
+            contest_doc = doc
+        else:
+            raise HTTPException(status_code=404, detail="Contest not found")
     data = contest_doc.to_dict()
     
     q_data = []

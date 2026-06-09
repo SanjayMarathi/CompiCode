@@ -128,7 +128,6 @@ export default function SolvePlatform() {
           const currentElapsed = Math.floor((Date.now() - start) / 1000);
           setElapsedSeconds(currentElapsed);
           if (contestInfo.overall_time_limit && currentElapsed >= contestInfo.overall_time_limit * 60) {
-            alert("Time is up!");
             navigate(`/contest/${contestId}`);
           }
         };
