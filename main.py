@@ -381,8 +381,8 @@ def get_contest(link_code: str):
         except:
             pass
 
-    # Auto-end standard contest if time is up
-    if data.get("mode") == "standard" and data.get("status") == "active" and data.get("overall_time_limit"):
+    # Auto-end standard or timed contest if time is up
+    if data.get("mode") in ["standard", "timed"] and data.get("status") == "active" and data.get("overall_time_limit"):
         if elapsed >= data["overall_time_limit"] * 60:
             contest_doc.reference.update({"status": "ended"})
             data["status"] = "ended"

@@ -158,7 +158,7 @@ export default function ContestLayout({ userObj }) {
   };
 
   useEffect(() => {
-    if (contest && !contestStarted && contest.scheduled_start_time) {
+    if (contest && contest.status === 'pending' && !contestStarted && contest.scheduled_start_time) {
       const startMs = new Date(contest.scheduled_start_time).getTime();
       const updateCountdown = () => {
         const diffMs = startMs - Date.now();
