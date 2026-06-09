@@ -266,8 +266,18 @@ export default function ContestLayout({ userObj }) {
 
             {isHost ? (
               <div style={{ textAlign: 'center' }}>
-                <p style={{ color: '#aaa', marginBottom: '1.5rem' }}>Share the invite link with participants, then start the contest when everyone is ready.</p>
-                <button className="btn btn-danger" onClick={handleHostStart} style={{ padding: '0.9rem 3rem', fontSize: '1.1rem' }}>Start Contest</button>
+                <p style={{ color: '#aaa', marginBottom: '1.5rem' }}>Share the invite link with participants. {contest.scheduled_start_time ? 'The contest will start automatically on time.' : 'Start the contest when everyone is ready.'}</p>
+                
+                {contest.scheduled_start_time && scheduledCountdown !== null && scheduledCountdown > 0 ? (
+                  <>
+                    <div style={{ fontSize: '3rem', fontWeight: 700, color: 'var(--secondary)', marginBottom: '1rem' }}>
+                      {formatTime(scheduledCountdown)}
+                    </div>
+                    <h3 className="pulse-text" style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>Host: Contest starts automatically...</h3>
+                  </>
+                ) : (
+                  <button className="btn btn-danger" onClick={handleHostStart} style={{ padding: '0.9rem 3rem', fontSize: '1.1rem' }}>Start Contest</button>
+                )}
               </div>
             ) : contest.mode === 'sudden_death' ? (
               <div style={{ textAlign: 'center' }}>
@@ -333,7 +343,7 @@ export default function ContestLayout({ userObj }) {
           {isHost && contest.status === 'active' && (
             <button className="btn btn-danger" onClick={() => setShowEndConfirm(true)} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>End Contest</button>
           )}
-          {isHost && contest.status === 'pending' && (
+          {isHost && contest.status === 'pending' && (!contest.scheduled_start_time || (scheduledCountdown !== null && scheduledCountdown <= 0)) && (
             <button className="btn btn-primary" onClick={startStandard} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>Start Contest</button>
           )}
         </div>
