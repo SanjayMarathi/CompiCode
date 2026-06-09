@@ -18,7 +18,6 @@ export default function HostPanel() {
   const [bankProblems, setBankProblems] = useState([]);
   const [selectedBankIds, setSelectedBankIds] = useState(new Set());
   const [editingIdx, setEditingIdx] = useState(null);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   const emptyProblem = () => ({ title: '', description: '', points: 10, time_limit: 300, test_cases: [{ input_data: '', expected_output: '' }, { input_data: '', expected_output: '' }] });
   const [draft, setDraft] = useState(emptyProblem());
@@ -28,8 +27,8 @@ export default function HostPanel() {
   const [sandboxResults, setSandboxResults] = useState(null);
   const [sandboxError, setSandboxError] = useState('');
 
-  const openNew = () => { setDraft(emptyProblem()); setEditingIdx(null); setSandboxCode(boilerplates['cpp']); setSandboxLang('cpp'); setSandboxResults(null); setSandboxError(''); setShowProblemForm(true); setShowDetailsModal(true); };
-  const openEdit = (idx) => { setDraft({ ...contestQuestions[idx], test_cases: contestQuestions[idx].test_cases.map(t => ({...t})) }); setEditingIdx(idx); setSandboxCode(boilerplates['cpp']); setSandboxLang('cpp'); setSandboxResults(null); setSandboxError(''); setShowProblemForm(true); setShowDetailsModal(false); };
+  const openNew = () => { setDraft(emptyProblem()); setEditingIdx(null); setSandboxCode(boilerplates['cpp']); setSandboxLang('cpp'); setSandboxResults(null); setSandboxError(''); setShowProblemForm(true); };
+  const openEdit = (idx) => { setDraft({ ...contestQuestions[idx], test_cases: contestQuestions[idx].test_cases.map(t => ({...t})) }); setEditingIdx(idx); setSandboxCode(boilerplates['cpp']); setSandboxLang('cpp'); setSandboxResults(null); setSandboxError(''); setShowProblemForm(true); };
 
   const openBank = async () => {
     try {
@@ -53,7 +52,6 @@ export default function HostPanel() {
   };
 
   const toggleSelectAll = () => {
-    // Filter out problems already in contest
     const addable = bankProblems.filter(p => !contestQuestions.find(q => q.bankId === p.id));
     if (selectedBankIds.size === addable.length && addable.length > 0) {
       setSelectedBankIds(new Set());
@@ -72,16 +70,25 @@ export default function HostPanel() {
         const res = await axios.get(`${API_URL}/questions/${p.id}`);
         const tcs = res.data.test_cases.map(t => ({ input_data: t.input, expected_output: t.expected }));
         newQuestions.push({ bankId: p.id, title: p.title, description: p.description, points: 10, time_limit: 300, fromBank: true, test_cases: tcs });
-      } catch {
-        // skip failed fetches
-      }
+      } catch {}
     }
     setContestQuestions(newQuestions);
     setShowBankModal(false);
     setSelectedBankIds(new Set());
   };
 
-
+  const addFromBank = async (p) => {
+    if (contestQuestions.find(q => q.bankId === p.id)) return alert('Already added');
+    
+    try {
+      const res = await axios.get(`${API_URL}/questions/${p.id}`);
+      const tcs = res.data.test_cases.map(t => ({ input_data: t.input, expected_output: t.expected }));
+      setContestQuestions([...contestQuestions, { bankId: p.id, title: p.title, description: p.description, points: 10, time_limit: 300, fromBank: true, test_cases: tcs }]);
+      setShowBankModal(false);
+    } catch {
+      alert("Failed to pull full question data from bank.");
+    }
+  };
 
   const saveProblem = (e) => {
     e.preventDefault();
@@ -137,7 +144,6 @@ export default function HostPanel() {
       const finalSelection = [];
       for (let q of contestQuestions) {
         if (q.fromBank && q.bankId) {
-          // Use existing bank question directly — no re-upload
           finalSelection.push({ question_id: q.bankId, points: parseInt(q.points), time_limit: parseInt(q.time_limit) });
         } else {
           const resQ = await axios.post(`${API_URL}/questions`, {
@@ -150,7 +156,7 @@ export default function HostPanel() {
         title, description: desc, mode,
         penalty_per_wrong_answer: parseInt(penalty),
         overall_time_limit: parseInt(overallLimit),
-        scheduled_start_time: scheduledStart ? new Date(scheduledStart).toISOString() : null,
+        scheduled_start_time: scheduledStart ? scheduledStart : null,
         selected_questions: finalSelection
       });
       navigate(`/contest/${res.data.link_code}`);
@@ -165,147 +171,6 @@ export default function HostPanel() {
     timed: { label: 'Timed Mode', color: 'var(--secondary)', desc: 'Each problem has its own countdown. Once time runs out on a problem, it locks for that player.' },
   };
 
-  if (showProblemForm) {
-    return (
-      <div className="solve-container">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button className="btn btn-secondary" onClick={() => setShowProblemForm(false)} style={{ padding: '0.4rem 0.8rem' }}>&larr; Back to Contest</button>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <button className="btn btn-secondary" onClick={() => setShowDetailsModal(true)} style={{ padding: '0.4rem 0.8rem' }}>Edit Details & Testcases</button>
-            <button className="btn btn-primary" onClick={saveProblem} style={{ padding: '0.4rem 0.8rem' }}>Save Problem</button>
-          </div>
-        </div>
-
-        <div className="problem-title">
-          <h1 style={{ margin: 0 }}>{draft.title || 'Untitled Problem'}</h1>
-        </div>
-        
-        <div className="problem-desc">
-          <p style={{ whiteSpace: 'pre-line' }}>{draft.description || 'No description provided.'}</p>
-          {draft.test_cases.slice(0, 2).map((tc, idx) => (
-            <div key={idx} className="example-block" style={{ marginTop: '1.5rem' }}>
-              <strong style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--primary)' }}>Example {idx + 1}:</strong>
-              <div style={{ marginBottom: '0.5rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Input:</span>
-                <pre style={{ marginTop: '0.25rem', background: '#111', padding: '0.75rem', borderRadius: '4px', border: '1px solid #333' }}>{tc.input_data}</pre>
-              </div>
-              <div>
-                <span style={{ color: 'var(--text-secondary)' }}>Output:</span>
-                <pre style={{ marginTop: '0.25rem', background: '#111', padding: '0.75rem', borderRadius: '4px', border: '1px solid #333' }}>{tc.expected_output}</pre>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="editor-wrapper">
-          <div className="editor-toolbar">
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-              <select className="form-input" value={sandboxLang} onChange={e => {setSandboxLang(e.target.value); setSandboxCode(boilerplates[e.target.value]);}} style={{ width: 'auto', background: '#333', border: '1px solid #444', color: '#ccc', padding: '0.4rem 1rem', borderRadius: '4px' }}>
-                <option value="cpp">C++</option>
-                <option value="python">Python</option>
-                <option value="java">Java</option>
-              </select>
-            </div>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <span style={{ fontSize: '1rem', color: sandboxError ? 'var(--danger)' : 'var(--text-secondary)', marginRight: '1.5rem', fontWeight: 700 }}>
-                {sandboxError}
-              </span>
-              <button className="btn btn-primary" onClick={runSandbox} disabled={sandboxTesting} style={{ padding: '0.5rem 2.5rem', borderRadius: '0' }}>
-                {sandboxTesting ? 'Evaluating...' : 'Run Tests'}
-              </button>
-            </div>
-          </div>
-          <div style={{ height: '400px', background: 'var(--editor-bg)' }}>
-            <Editor
-              height="100%"
-              theme="vs-dark"
-              language={sandboxLang === 'cpp' ? 'cpp' : sandboxLang}
-              value={sandboxCode}
-              onChange={val => setSandboxCode(val)}
-              options={{ minimap: { enabled: false }, fontSize: 15, wordWrap: 'on', padding: { top: 16 } }}
-            />
-          </div>
-        </div>
-
-        <div className="testcase-panel">
-          <div className="testcase-header">Console Output</div>
-          <div className="testcase-body">
-            {!sandboxResults && !sandboxTesting && <div style={{ color: '#555' }}>Write code and click Run Tests to test your problem cases...</div>}
-            {sandboxTesting && !sandboxResults && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem' }}>
-                <div style={{ width: '24px', height: '24px', border: '3px solid rgba(255,123,0,0.3)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite', flexShrink: 0 }}></div>
-                <span style={{ color: 'var(--primary)', fontWeight: 600 }}>Evaluating your code...</span>
-              </div>
-            )}
-            {sandboxResults && sandboxResults.map((res, i) => {
-               let sanitizedActual = res.actual || 'No output';
-               if (sanitizedActual.includes('File "') && sanitizedActual.includes('line')) {
-                 const lines = sanitizedActual.split('\n').map(l => l.trim()).filter(l => l);
-                 sanitizedActual = lines[lines.length - 1] || 'Runtime/Syntax Error';
-               }
-               return (
-                 <div key={i} className="test-block" style={{ borderLeft: `4px solid ${res.passed ? 'var(--success)' : 'var(--danger)'}` }}>
-                   <div style={{ fontWeight: 700, color: res.passed ? 'var(--success)' : 'var(--danger)', marginBottom: '0.8rem', fontSize: '0.9rem' }}>
-                     Testcase {i + 1} {res.passed ? 'Passed' : 'Failed'}
-                   </div>
-                   <div style={{ color: '#ccc', fontFamily: 'Consolas, monospace', fontSize: '0.85rem', lineHeight: '1.6' }}>
-                     <div style={{ marginBottom: '0.5rem' }}><span style={{ color: '#888' }}>Input:</span> <span style={{ background: '#111', padding: '1px 4px' }}>{res.input}</span></div>
-                     <div style={{ marginBottom: '0.5rem' }}><span style={{ color: '#888' }}>Expected:</span> <span style={{ background: '#111', padding: '1px 4px' }}>{res.expected}</span></div>
-                     <div><span style={{ color: '#888' }}>Actual:</span> <span style={{ background: '#111', padding: '1px 4px' }}>{sanitizedActual}</span></div>
-                   </div>
-                 </div>
-               );
-            })}
-          </div>
-        </div>
-
-        {showDetailsModal && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-            <div style={{ background: '#1e1e1e', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.5rem', width: '100%', maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto' }}>
-              <h3 style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>{editingIdx !== null ? 'Edit Problem Details' : 'New Problem Details'}</h3>
-              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                <label style={{ fontSize: '1.1rem', color: '#fff' }}>Problem Title</label>
-                <input required className="form-input" placeholder="e.g. Two Sum" value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} style={{ padding: '0.8rem', fontSize: '1rem' }} />
-              </div>
-              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                <label style={{ fontSize: '1.1rem', color: '#fff' }}>Problem Statement</label>
-                <textarea required className="form-input" rows="5" placeholder="Describe the problem. Include input/output format and constraints." value={draft.description} onChange={e => setDraft({ ...draft, description: e.target.value })} style={{ padding: '0.8rem', fontFamily: 'inherit', fontSize: '0.95rem' }} />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label>Points</label>
-                  <input type="number" min="1" className="form-input" value={draft.points} onChange={e => setDraft({ ...draft, points: parseInt(e.target.value) })} />
-                </div>
-                {mode === 'timed' && (
-                  <div className="form-group" style={{ flex: 1 }}>
-                    <label>Time Limit (seconds)</label>
-                    <input type="number" min="30" className="form-input" value={draft.time_limit} onChange={e => setDraft({ ...draft, time_limit: parseInt(e.target.value) })} />
-                  </div>
-                )}
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <label style={{ color: 'var(--text-secondary)' }}>Test Cases (min 2)</label>
-                <button type="button" className="btn btn-secondary" onClick={() => setDraft({ ...draft, test_cases: [...draft.test_cases, { input_data: '', expected_output: '' }] })} style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}>+ Row</button>
-              </div>
-              {draft.test_cases.map((tc, i) => (
-                <div key={i} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'flex-start' }}>
-                  <span style={{ color: '#666', fontSize: '0.8rem', minWidth: '20px', marginTop: '0.5rem' }}>{i + 1}.</span>
-                  <textarea className="form-input" rows="2" placeholder="Input (empty if none)" value={tc.input_data} onChange={e => updateTC(i, 'input_data', e.target.value)} style={{ flex: 1, fontFamily: 'monospace', resize: 'vertical' }} />
-                  <textarea required className="form-input" rows="2" placeholder="Expected output" value={tc.expected_output} onChange={e => updateTC(i, 'expected_output', e.target.value)} style={{ flex: 1, fontFamily: 'monospace', resize: 'vertical' }} />
-                  {i >= 2 && <button type="button" className="btn btn-danger" onClick={() => setDraft({ ...draft, test_cases: draft.test_cases.filter((_, ti) => ti !== i) })} style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem', marginTop: '0.3rem' }}>X</button>}
-                </div>
-              ))}
-              <div style={{ display: 'flex', gap: '1rem', marginTop: '1.25rem' }}>
-                <button type="button" className="btn btn-primary" onClick={() => setShowDetailsModal(false)} style={{ flex: 1 }}>Done</button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
   return (
     <div className="container">
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
@@ -314,7 +179,6 @@ export default function HostPanel() {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', alignItems: 'start', gap: '1.5rem' }}>
 
-        {/* Left: Settings */}
         <div>
           <div className="glass-panel">
             <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', marginBottom: '1rem' }}>Contest Configuration</h3>
@@ -350,14 +214,13 @@ export default function HostPanel() {
               <input type="number" min="0" className="form-input" value={penalty} onChange={e => setPenalty(e.target.value)} />
             </div>
             <div className="form-group">
-              <label>Scheduled Start Time (optional)</label>
+              <label>Scheduled Start Time (Optional, UTC/Local handled by browser)</label>
               <input type="datetime-local" className="form-input" value={scheduledStart} onChange={e => setScheduledStart(e.target.value)} />
             </div>
             <button onClick={deployContest} className="btn btn-primary" style={{ width: '100%', padding: '0.85rem', fontSize: '1rem' }}>Create Contest</button>
           </div>
         </div>
 
-        {/* Right: Problems */}
         <div>
           <div className="glass-panel">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
@@ -396,7 +259,6 @@ export default function HostPanel() {
         </div>
       </div>
 
-      {/* Bank Modal with Select All */}
       {showBankModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
           <div style={{ background: '#1e1e1e', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.5rem', width: '100%', maxWidth: '600px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
@@ -439,8 +301,10 @@ export default function HostPanel() {
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.15rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.description?.slice(0, 80)}...</div>
                       </div>
                     </div>
-                    {alreadyAdded && (
+                    {alreadyAdded ? (
                       <span style={{ fontSize: '0.8rem', color: 'var(--success)', fontWeight: 600, flexShrink: 0, marginLeft: '0.5rem' }}>✓ Added</span>
+                    ) : (
+                      <button className="btn btn-primary" style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem', flexShrink: 0, marginLeft: '0.5rem' }} onClick={(e) => { e.stopPropagation(); addFromBank(p); }}>Add</button>
                     )}
                   </div>
                 );
@@ -451,6 +315,105 @@ export default function HostPanel() {
         </div>
       )}
 
+      {showProblemForm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div style={{ background: '#1e1e1e', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.5rem', width: '100%', maxWidth: '1200px', maxHeight: '90vh', display: 'flex', gap: '2rem' }}>
+            <div style={{ flex: 1, overflowY: 'auto', paddingRight: '0.5rem' }}>
+              <h3 style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>{editingIdx !== null ? 'Edit Problem' : 'New Problem'}</h3>
+              <form onSubmit={saveProblem}>
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ fontSize: '1.1rem', color: '#fff' }}>Problem Title</label>
+                  <input required className="form-input" placeholder="e.g. Two Sum" value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} style={{ padding: '0.8rem', fontSize: '1rem' }} />
+                </div>
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ fontSize: '1.1rem', color: '#fff' }}>Problem Statement</label>
+                  <textarea required className="form-input" rows="5" placeholder="Describe the problem. Include input/output format and constraints." value={draft.description} onChange={e => setDraft({ ...draft, description: e.target.value })} style={{ padding: '0.8rem', fontFamily: 'inherit', fontSize: '0.95rem' }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label>Points</label>
+                    <input type="number" min="1" className="form-input" value={draft.points} onChange={e => setDraft({ ...draft, points: parseInt(e.target.value) })} />
+                  </div>
+                  {mode === 'timed' && (
+                    <div className="form-group" style={{ flex: 1 }}>
+                      <label>Time Limit (seconds)</label>
+                      <input type="number" min="30" className="form-input" value={draft.time_limit} onChange={e => setDraft({ ...draft, time_limit: parseInt(e.target.value) })} />
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ marginBottom: '0.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <label style={{ color: 'var(--text-secondary)' }}>Test Cases (min 2)</label>
+                    <button type="button" className="btn btn-secondary" onClick={() => setDraft({ ...draft, test_cases: [...draft.test_cases, { input_data: '', expected_output: '' }] })} style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}>+ Row</button>
+                  </div>
+                  {draft.test_cases.map((tc, i) => (
+                    <div key={i} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'flex-start' }}>
+                      <span style={{ color: '#666', fontSize: '0.8rem', minWidth: '20px', marginTop: '0.5rem' }}>{i + 1}.</span>
+                      <textarea className="form-input" rows="2" placeholder="Input (empty if none)" value={tc.input_data} onChange={e => updateTC(i, 'input_data', e.target.value)} style={{ flex: 1, fontFamily: 'monospace', resize: 'vertical' }} />
+                      <textarea required className="form-input" rows="2" placeholder="Expected output" value={tc.expected_output} onChange={e => updateTC(i, 'expected_output', e.target.value)} style={{ flex: 1, fontFamily: 'monospace', resize: 'vertical' }} />
+                      {i >= 2 && <button type="button" className="btn btn-danger" onClick={() => setDraft({ ...draft, test_cases: draft.test_cases.filter((_, ti) => ti !== i) })} style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem', marginTop: '0.3rem' }}>X</button>}
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowProblemForm(false)} style={{ flex: 1 }}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 2 }}>Save Problem</button>
+                </div>
+              </form>
+            </div>
+            
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--border-color)', paddingLeft: '2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+                <h3 style={{ margin: 0 }}>Sandbox Testing</h3>
+                <select className="form-input" value={sandboxLang} onChange={e => {setSandboxLang(e.target.value); setSandboxCode(boilerplates[e.target.value]);}} style={{ width: 'auto', padding: '0.3rem 0.8rem', background: '#333' }}>
+                  <option value="cpp">C++</option>
+                  <option value="python">Python</option>
+                  <option value="java">Java</option>
+                </select>
+              </div>
+              
+              <div style={{ flex: 1, border: '1px solid #333', minHeight: '300px' }}>
+                <Editor
+                  height="100%"
+                  theme="vs-dark"
+                  language={sandboxLang === 'cpp' ? 'cpp' : sandboxLang}
+                  value={sandboxCode}
+                  onChange={val => setSandboxCode(val)}
+                  options={{ minimap: { enabled: false }, fontSize: 14 }}
+                />
+              </div>
+              
+              <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: sandboxError ? 'var(--danger)' : 'var(--text-secondary)' }}>{sandboxError || (sandboxTesting ? 'Evaluating...' : 'Write code to test your problem cases')}</span>
+                <button type="button" className="btn btn-primary" onClick={runSandbox} disabled={sandboxTesting}>
+                  {sandboxTesting ? 'Running...' : 'Run Tests'}
+                </button>
+              </div>
+              
+              {sandboxResults && (
+                <div style={{ marginTop: '1rem', background: '#111', padding: '1rem', borderRadius: '4px', maxHeight: '200px', overflowY: 'auto' }}>
+                  {sandboxResults.map((res, i) => {
+                     let sanitizedActual = res.actual || 'No output';
+                     if (sanitizedActual.includes('File "') && sanitizedActual.includes('line')) {
+                       const lines = sanitizedActual.split('\n').map(l => l.trim()).filter(l => l);
+                       sanitizedActual = lines[lines.length - 1] || 'Runtime/Syntax Error';
+                     }
+                     return (
+                       <div key={i} style={{ borderLeft: `3px solid ${res.passed ? 'var(--success)' : 'var(--danger)'}`, paddingLeft: '0.5rem', marginBottom: '0.5rem', fontSize: '0.85rem' }}>
+                         <div style={{ color: res.passed ? 'var(--success)' : 'var(--danger)', fontWeight: 'bold' }}>Testcase {i + 1}: {res.passed ? 'Passed' : 'Failed'}</div>
+                         <div style={{ color: '#aaa', marginTop: '0.2rem', fontFamily: 'monospace' }}>Expected: {res.expected}</div>
+                         <div style={{ color: '#aaa', fontFamily: 'monospace' }}>Actual: {sanitizedActual}</div>
+                       </div>
+                     );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
