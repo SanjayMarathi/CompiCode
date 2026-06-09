@@ -270,23 +270,27 @@ export default function ContestLayout({ userObj }) {
               <div style={{ textAlign: 'center' }}>
                 <p style={{ color: '#aaa', marginBottom: '1.5rem' }}>Share the invite link with participants. {contest.scheduled_start_time ? 'The contest will start automatically on time.' : 'Start the contest when everyone is ready.'}</p>
                 
-                {contest.scheduled_start_time && scheduledCountdown !== null && scheduledCountdown > 0 ? (
+                {contest.scheduled_start_time ? (
                   <>
                     <div style={{ fontSize: '3rem', fontWeight: 700, color: 'var(--secondary)', marginBottom: '1rem' }}>
-                      {formatTime(scheduledCountdown)}
+                      {scheduledCountdown !== null && scheduledCountdown > 0 ? formatTime(scheduledCountdown) : '0:00'}
                     </div>
-                    <h3 className="pulse-text" style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>Host: Contest starts automatically...</h3>
+                    <h3 className="pulse-text" style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>
+                      {scheduledCountdown !== null && scheduledCountdown <= 0 ? 'Starting automatically...' : 'Host: Contest starts automatically...'}
+                    </h3>
                   </>
                 ) : (
                   <button className="btn btn-danger" onClick={handleHostStart} style={{ padding: '0.9rem 3rem', fontSize: '1.1rem' }}>Start Contest</button>
                 )}
               </div>
-            ) : contest.scheduled_start_time && scheduledCountdown !== null && scheduledCountdown > 0 ? (
+            ) : contest.scheduled_start_time ? (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '3rem', fontWeight: 700, color: 'var(--secondary)', marginBottom: '1rem' }}>
-                  {formatTime(scheduledCountdown)}
+                  {scheduledCountdown !== null && scheduledCountdown > 0 ? formatTime(scheduledCountdown) : '0:00'}
                 </div>
-                <h3 className="pulse-text" style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>Contest begins soon...</h3>
+                <h3 className="pulse-text" style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>
+                  {scheduledCountdown !== null && scheduledCountdown <= 0 ? 'Entering arena...' : 'Contest begins soon...'}
+                </h3>
               </div>
             ) : contest.mode === 'sudden_death' ? (
               <div style={{ textAlign: 'center' }}>
