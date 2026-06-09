@@ -165,6 +165,8 @@ export default function ContestLayout({ userObj }) {
         if (diffMs <= 0) {
           if (isHost && !contestStarted) {
              handleHostStart();
+          } else if (!isHost && !contestStarted && contest.mode === 'sudden_death') {
+             navigate(`/solve/${contest.id}/sudden-death`);
           }
           setScheduledCountdown(0);
         } else {
@@ -175,7 +177,7 @@ export default function ContestLayout({ userObj }) {
       const interval = setInterval(updateCountdown, 1000);
       return () => clearInterval(interval);
     }
-  }, [contest, contestStarted, isHost]);
+  }, [contest, contestStarted, isHost, navigate]);
 
   const endContest = async () => {
     try {
@@ -279,27 +281,23 @@ export default function ContestLayout({ userObj }) {
                   <button className="btn btn-danger" onClick={handleHostStart} style={{ padding: '0.9rem 3rem', fontSize: '1.1rem' }}>Start Contest</button>
                 )}
               </div>
+            ) : contest.scheduled_start_time && scheduledCountdown !== null && scheduledCountdown > 0 ? (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '3rem', fontWeight: 700, color: 'var(--secondary)', marginBottom: '1rem' }}>
+                  {formatTime(scheduledCountdown)}
+                </div>
+                <h3 className="pulse-text" style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>Contest begins soon...</h3>
+              </div>
             ) : contest.mode === 'sudden_death' ? (
               <div style={{ textAlign: 'center' }}>
-                <p style={{ color: '#aaa', marginBottom: '1.5rem' }}>Join the waiting room now to secure your spot.</p>
+                <p style={{ color: '#aaa', marginBottom: '1.5rem' }}>The arena is ready. Join the lobby to secure your spot.</p>
                 <button className="btn btn-primary" onClick={handleParticipantEnter} style={{ padding: '0.9rem 3rem', fontSize: '1.1rem' }}>Enter Lobby</button>
               </div>
             ) : (
               <div style={{ textAlign: 'center' }}>
-                {scheduledCountdown !== null && scheduledCountdown > 0 ? (
-                  <>
-                    <div style={{ fontSize: '3rem', fontWeight: 700, color: 'var(--secondary)', marginBottom: '1rem' }}>
-                      {formatTime(scheduledCountdown)}
-                    </div>
-                    <h3 className="pulse-text" style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>Contest begins soon...</h3>
-                  </>
-                ) : (
-                  <>
-                    <div className="loader" style={{ margin: '0 auto 1.5rem', width: '30px', height: '30px', border: '3px solid rgba(255,123,0,0.3)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                    <h3 className="pulse-text" style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>Waiting for host to start the contest...</h3>
-                    <p style={{ color: '#aaa', fontSize: '0.9rem' }}>The arena will automatically open once the host begins.</p>
-                  </>
-                )}
+                <div className="loader" style={{ margin: '0 auto 1.5rem', width: '30px', height: '30px', border: '3px solid rgba(255,123,0,0.3)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                <h3 className="pulse-text" style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>Waiting for host to start the contest...</h3>
+                <p style={{ color: '#aaa', fontSize: '0.9rem' }}>The arena will automatically open once the host begins.</p>
               </div>
             )}
           </div>
