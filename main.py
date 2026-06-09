@@ -621,8 +621,11 @@ async def submit_code(submission: SubmitCode, current_user: dict = Depends(get_c
             
     time_taken = 0
     if contest.get("start_time"):
-        start_dt = datetime.fromisoformat(contest.get("start_time"))
-        time_taken = int((datetime.utcnow() - start_dt).total_seconds())
+        try:
+            start_dt = datetime.fromisoformat(contest.get("start_time").replace('Z', ''))
+            time_taken = int((datetime.utcnow() - start_dt).total_seconds())
+        except:
+            pass
             
     db.collection("submissions").add({
         "user_id": current_user["id"],
