@@ -466,9 +466,18 @@ export default function SolvePlatform() {
                     Testcase {i + 1} {res.passed ? 'Accepted' : (res.error ? 'Compilation/Runtime Error' : 'Wrong Answer')}
                   </div>
                   <div style={{ color: '#ccc', fontFamily: 'Consolas, monospace', fontSize: '0.85rem', lineHeight: '1.6' }}>
-                    <div style={{ marginBottom: '0.5rem' }}><span style={{ color: '#888' }}>Input:</span> <span style={{ background: '#111', padding: '1px 4px' }}>{res.input}</span></div>
-                    <div style={{ marginBottom: '0.5rem' }}><span style={{ color: '#888' }}>Expected:</span> <span style={{ background: '#111', padding: '1px 4px' }}>{res.expected}</span></div>
-                    <div><span style={{ color: res.error ? 'var(--danger)' : '#888' }}>{res.error ? 'Error Details:' : 'Actual:'}</span> <pre style={{ marginTop: '0.25rem', background: '#111', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap' }}>{outputToDisplay}</pre></div>
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      <span style={{ color: '#888', display: 'block', marginBottom: '0.25rem' }}>Input:</span>
+                      <pre style={{ margin: 0, background: '#111', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace' }}>{res.input}</pre>
+                    </div>
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      <span style={{ color: '#888', display: 'block', marginBottom: '0.25rem' }}>Expected:</span>
+                      <pre style={{ margin: 0, background: '#111', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace' }}>{res.expected}</pre>
+                    </div>
+                    <div>
+                      <span style={{ color: res.error ? 'var(--danger)' : '#888', display: 'block', marginBottom: '0.25rem' }}>{res.error ? 'Error Details:' : 'Actual:'}</span>
+                      <pre style={{ margin: 0, background: '#111', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace' }}>{outputToDisplay}</pre>
+                    </div>
                   </div>
                 </div>
               );
