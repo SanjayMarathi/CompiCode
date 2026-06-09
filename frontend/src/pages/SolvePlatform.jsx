@@ -450,22 +450,18 @@ export default function SolvePlatform() {
               </div>
             )}
             {evalResults && evalResults.map((res, i) => {
-              // Sanitize output to hide code/tracebacks
-              let sanitizedActual = res.actual || 'No output';
-              if (sanitizedActual.includes('File "') && sanitizedActual.includes('line')) {
-                const lines = sanitizedActual.split('\n').map(l => l.trim()).filter(l => l);
-                sanitizedActual = lines[lines.length - 1] || 'Runtime/Syntax Error';
-              }
+              // Show error if it exists, otherwise actual output. Don't hide tracebacks entirely because users need to debug.
+              let outputToDisplay = res.error ? res.error : (res.actual || 'No output');
               
               return (
                 <div key={i} className="test-block" style={{ borderLeft: `4px solid ${res.passed ? 'var(--success)' : 'var(--danger)'}` }}>
                   <div style={{ fontWeight: 700, color: res.passed ? 'var(--success)' : 'var(--danger)', marginBottom: '0.8rem', fontSize: '0.9rem' }}>
-                    Testcase {i + 1} {res.passed ? 'Accepted' : 'Wrong Answer'}
+                    Testcase {i + 1} {res.passed ? 'Accepted' : (res.error ? 'Compilation/Runtime Error' : 'Wrong Answer')}
                   </div>
                   <div style={{ color: '#ccc', fontFamily: 'Consolas, monospace', fontSize: '0.85rem', lineHeight: '1.6' }}>
                     <div style={{ marginBottom: '0.5rem' }}><span style={{ color: '#888' }}>Input:</span> <span style={{ background: '#111', padding: '1px 4px' }}>{res.input}</span></div>
                     <div style={{ marginBottom: '0.5rem' }}><span style={{ color: '#888' }}>Expected:</span> <span style={{ background: '#111', padding: '1px 4px' }}>{res.expected}</span></div>
-                    <div><span style={{ color: '#888' }}>Actual:</span> <span style={{ background: '#111', padding: '1px 4px' }}>{sanitizedActual}</span></div>
+                    <div><span style={{ color: res.error ? 'var(--danger)' : '#888' }}>{res.error ? 'Error Details:' : 'Actual:'}</span> <pre style={{ marginTop: '0.25rem', background: '#111', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap' }}>{outputToDisplay}</pre></div>
                   </div>
                 </div>
               );
