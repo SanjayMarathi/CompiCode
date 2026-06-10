@@ -17,7 +17,9 @@ export default function CodeforcesStandings({ leaderboard, questions, title, eva
           <tr style={{ borderBottom: '1px solid #333', background: '#111' }}>
             <th style={{ padding: '1rem', textAlign: 'left', color: '#999', fontWeight: 500, width: '60px' }}>Rank</th>
             <th style={{ padding: '1rem', textAlign: 'left', color: '#999', fontWeight: 500 }}>Name</th>
-            <th style={{ padding: '1rem', textAlign: 'center', color: '#999', fontWeight: 500, width: '100px' }}>Score</th>
+            <th style={{ padding: '1rem', textAlign: 'center', color: '#999', fontWeight: 500, width: '110px' }}>Score</th>
+            <th style={{ padding: '1rem', textAlign: 'center', color: '#999', fontWeight: 500, width: '110px' }}>Solved</th>
+            <th style={{ padding: '1rem', textAlign: 'center', color: '#999', fontWeight: 500, width: '110px' }}>Testcases</th>
             <th style={{ padding: '1rem', textAlign: 'center', color: '#999', fontWeight: 500, width: '120px' }}>Finish Time</th>
             {(questions || []).map((q, i) => (
               <th key={q.id} style={{ padding: '1rem', textAlign: 'center', color: '#999', fontWeight: 500 }}>Q{i+1} ({q.points || 10})</th>
@@ -26,7 +28,7 @@ export default function CodeforcesStandings({ leaderboard, questions, title, eva
         </thead>
         <tbody>
           {leaderboard.length === 0 ? (
-            <tr><td colSpan={4 + (questions || []).length} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem' }}>No submissions yet</td></tr>
+            <tr><td colSpan={6 + (questions || []).length} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem' }}>No submissions yet</td></tr>
           ) : leaderboard.map((l, idx) => (
             <tr key={idx} style={{ borderBottom: '1px solid #222', background: idx % 2 === 0 ? '#1a1a1a' : '#1e1e1e' }}>
               <td style={{ padding: '1rem', color: idx < 3 ? 'var(--primary)' : '#fff', fontWeight: 700 }}>{idx + 1}</td>
@@ -34,17 +36,19 @@ export default function CodeforcesStandings({ leaderboard, questions, title, eva
                 <strong style={{ color: '#fff', fontSize: '0.95rem' }}>{l.username}</strong>
               </td>
               <td style={{ padding: '1rem', textAlign: 'center' }}>
-                {evaluationMode === 'partial' ? (
-                  <div>
-                    <div style={{ color: 'var(--secondary)', fontWeight: 700, fontSize: '1.05rem' }}>{l.total_testcases || 0} <span style={{fontSize:'0.75rem', fontWeight:500}}>TCs</span></div>
-                    <div style={{ color: '#888', fontSize: '0.8rem' }}>{l.solved_count ?? l.solved_question_ids?.length ?? 0} Solved</div>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '1.05rem' }}>{l.solved_count ?? l.solved_question_ids?.length ?? 0} <span style={{fontSize:'0.75rem', fontWeight:500}}>Solved</span></div>
-                    {(l.total_testcases > 0) && <div style={{ color: '#888', fontSize: '0.8rem' }}>{l.total_testcases} TCs</div>}
-                  </div>
-                )}
+                <div style={{ color: evaluationMode === 'partial' ? 'var(--secondary)' : 'var(--primary)', fontWeight: 700, fontSize: '1.05rem' }}>
+                  {l.score || 0} <span style={{fontSize:'0.75rem', fontWeight:500, color:'#888'}}>/ {l.total_points || 0} pts</span>
+                </div>
+              </td>
+              <td style={{ padding: '1rem', textAlign: 'center' }}>
+                <div style={{ color: '#ccc', fontWeight: 600, fontSize: '0.95rem' }}>
+                  {l.solved_count || 0} <span style={{fontSize:'0.75rem', fontWeight:500, color:'#888'}}>/ {l.total_questions || 0}</span>
+                </div>
+              </td>
+              <td style={{ padding: '1rem', textAlign: 'center' }}>
+                <div style={{ color: '#ccc', fontWeight: 600, fontSize: '0.95rem' }}>
+                  {l.total_testcases || 0} <span style={{fontSize:'0.75rem', fontWeight:500, color:'#888'}}>/ {l.max_testcases || 0}</span>
+                </div>
               </td>
               <td style={{ padding: '1rem', textAlign: 'center', color: '#aaa', fontFamily: 'Consolas, monospace' }}>
                 <div style={{ color: '#fff' }}>{formatTimeStr(l.total_time || 0)}</div>
@@ -63,7 +67,7 @@ export default function CodeforcesStandings({ leaderboard, questions, title, eva
                         </div>
                       ) : stat.testcases_passed > 0 ? (
                         <div style={{ color: 'var(--secondary)', fontSize: '0.9rem', fontWeight: 700, marginBottom: '0.2rem' }}>
-                          {stat.testcases_passed} TCs
+                          {stat.testcases_passed}/{stat.total_testcases} TCs
                         </div>
                       ) : (
                         <div style={{ color: 'var(--danger)', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.2rem' }}>
@@ -71,8 +75,8 @@ export default function CodeforcesStandings({ leaderboard, questions, title, eva
                         </div>
                       )}
                       
-                      {stat.solved && stat.testcases_passed > 0 && (
-                        <div style={{ color: 'rgba(0,255,0,0.6)', fontSize: '0.75rem', marginTop: '2px', fontWeight: 600 }}>{stat.testcases_passed} TCs</div>
+                      {stat.solved && stat.total_testcases > 0 && (
+                        <div style={{ color: 'rgba(0,255,0,0.6)', fontSize: '0.75rem', marginTop: '2px', fontWeight: 600 }}>{stat.total_testcases}/{stat.total_testcases} TCs</div>
                       )}
                       
                       {(stat.solved || stat.testcases_passed > 0) && stat.wrong_count > 0 && (

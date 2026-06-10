@@ -699,6 +699,19 @@ def get_leaderboard(contest_id: str):
     cqs = contest.get("questions", [])
     question_ids = [cq["question_id"] for cq in cqs]
     points_map = {cq["question_id"]: cq.get("points", 10) for cq in cqs}
+    
+    eval_mode = contest.get("evaluation_mode", "strict")
+
+    tcs_map = {}
+    for qid in question_ids:
+        q_doc = db.collection("questions").document(qid).get()
+        if q_doc.exists:
+            tcs_map[qid] = len(q_doc.to_dict().get("test_cases", []))
+        else:
+            tcs_map[qid] = 1
+
+    total_contest_points = sum(points_map.values())
+    total_contest_tcs = sum(tcs_map.values())
 
     participants = db.collection("participants").where(filter=FieldFilter("contest_id", "==", contest_id)).stream()
     participant_user_ids = [p.to_dict().get("user_id") for p in participants]
@@ -707,7 +720,6 @@ def get_leaderboard(contest_id: str):
         return []
         
     users = []
-    # Firestore 'in' query limit is 30, but we'll fetch one by one or in batches for simplicity here
     for uid in participant_user_ids:
         u_doc = db.collection("users").document(uid).get()
         if u_doc.exists:
@@ -723,9 +735,11 @@ def get_leaderboard(contest_id: str):
     for u in users:
         u_subs = [s for s in subs_list if s.get("user_id") == u["id"]]
         
-        total_testcases = 0
+        total_obtained_tcs = 0
         total_time_taken = 0
+        total_obtained_points = 0
         q_stats = {}
+        
         for qid in question_ids:
             q_subs = [s for s in u_subs if s.get("question_id") == qid]
             wrong = sum(1 for s in q_subs if not s.get("passed", False))
@@ -735,33 +749,52 @@ def get_leaderboard(contest_id: str):
             max_tc = 0
             if q_subs:
                 max_tc = max((s.get("testcases_passed", 0) for s in q_subs), default=0)
-            total_testcases += max_tc
+            total_obtained_tcs += max_tc
             
             time_taken = passed_sub.get("time_taken", 0) if passed_sub else 0
             total_time_taken += time_taken
             
-            q_stats[str(qid)] = {"solved": solved, "wrong_count": wrong, "time_taken": time_taken, "testcases_passed": max_tc}
+            q_total_tcs = tcs_map.get(qid, 1)
+            q_points = points_map.get(qid, 10)
+            
+            if eval_mode == "partial":
+                obtained_q_points = (max_tc / q_total_tcs) * q_points if q_total_tcs > 0 else 0
+            else:
+                obtained_q_points = q_points if solved else 0
+                
+            total_obtained_points += obtained_q_points
+            
+            q_stats[str(qid)] = {
+                "solved": solved, 
+                "wrong_count": wrong, 
+                "time_taken": time_taken, 
+                "testcases_passed": max_tc,
+                "total_testcases": q_total_tcs,
+                "obtained_points": obtained_q_points,
+                "total_points": q_points
+            }
 
         passed_qids = list(set(s.get("question_id") for s in u_subs if s.get("passed", False)))
-        score = sum(points_map.get(qid, 0) for qid in passed_qids)
         total_penalty = sum(s.get("penalty_incurred", 0) for s in u_subs)
 
         leaderboard.append({
             "username": u.get("username"),
-            "score": score,
+            "score": round(total_obtained_points, 2),
+            "total_points": total_contest_points,
             "penalty": total_penalty,
             "solved_count": len(passed_qids),
-            "total_testcases": total_testcases,
+            "total_questions": len(question_ids),
+            "total_testcases": total_obtained_tcs,
+            "max_testcases": total_contest_tcs,
             "total_time": total_time_taken,
             "solved_question_ids": passed_qids,
             "question_stats": q_stats
         })
 
-    eval_mode = contest.get("evaluation_mode", "strict")
     if eval_mode == "partial":
-        leaderboard.sort(key=lambda x: (-x["total_testcases"], x["total_time"], x["penalty"]))
+        leaderboard.sort(key=lambda x: (-x["score"], x["total_time"], x["penalty"]))
     else:
-        leaderboard.sort(key=lambda x: (-x["solved_count"], x["total_time"], -x["total_testcases"], x["penalty"]))
+        leaderboard.sort(key=lambda x: (-x["score"], x["total_time"], -x["total_testcases"], x["penalty"]))
         
     return leaderboard
 
