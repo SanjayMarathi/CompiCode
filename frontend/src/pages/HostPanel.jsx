@@ -61,7 +61,12 @@ export default function HostPanel() {
   };
 
   const addSelectedFromBank = async () => {
-    const toAdd = bankProblems.filter(p => selectedBankIds.has(p.id) && !contestQuestions.find(q => q.bankId === p.id));
+    // Preserve the exact order in which the host clicked the checkboxes
+    const selectedArray = Array.from(selectedBankIds);
+    const toAdd = selectedArray
+      .map(id => bankProblems.find(p => p.id === id))
+      .filter(p => p && !contestQuestions.find(q => q.bankId === p.id));
+      
     if (toAdd.length === 0) return;
     
     const newQuestions = [...contestQuestions];

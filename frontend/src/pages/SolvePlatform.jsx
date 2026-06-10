@@ -447,9 +447,9 @@ export default function SolvePlatform() {
         <div className="testcase-panel">
           <div className="testcase-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
              <span>Console Output</span>
-             {evalResults && (
-               <span style={{ fontSize: '0.85rem', color: evalResults.every(r => r.passed) ? 'var(--success)' : (evalResults.some(r => r.passed) ? 'var(--secondary)' : 'var(--danger)'), fontWeight: 600, background: 'rgba(0,0,0,0.2)', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>
-                 {evalResults.filter(r => r.passed).length} / {evalResults.length} Testcases Passed
+             {(evalResults || qData) && (
+               <span style={{ fontSize: '0.85rem', color: evalResults ? (evalResults.every(r => r.passed) ? 'var(--success)' : (evalResults.some(r => r.passed) ? 'var(--secondary)' : 'var(--danger)')) : 'var(--text-secondary)', fontWeight: 600, background: 'rgba(0,0,0,0.2)', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>
+                 {evalResults ? evalResults.filter(r => r.passed).length : 0} / {evalResults ? evalResults.length : (qData?.test_cases?.length || 0)} Testcases Passed
                </span>
              )}
           </div>
