@@ -37,7 +37,7 @@ export default function CodeforcesStandings({ leaderboard, questions, title }) {
               <td style={{ padding: '1rem', textAlign: 'center', color: '#aaa', fontFamily: 'Consolas, monospace' }}>{formatTimeStr(l.penalty * 60)}</td>
               {(questions || []).map((q) => {
                 const stat = l.question_stats?.[String(q.id)];
-                if (!stat) return <td key={q.id} style={{ padding: '1rem', textAlign: 'center', color: '#444' }}>-</td>;
+                if (!stat) return <td key={q.id} style={{ padding: '1rem', textAlign: 'center', color: '#444' }}></td>;
                 if (stat.solved) return (
                   <td key={q.id} style={{ padding: '1rem', textAlign: 'center' }}>
                     <div style={{ color: 'var(--success)', fontFamily: 'Consolas, monospace', marginBottom: '0.2rem' }}>
@@ -51,7 +51,7 @@ export default function CodeforcesStandings({ leaderboard, questions, title }) {
                     <div style={{ color: 'var(--danger)', fontSize: '0.8rem', fontWeight: 600 }}>-{stat.wrong_count}</div>
                   </td>
                 );
-                return <td key={q.id} style={{ padding: '1rem', textAlign: 'center', color: '#444' }}>-</td>;
+                return <td key={q.id} style={{ padding: '1rem', textAlign: 'center', color: '#444' }}></td>;
               })}
             </tr>
           ))}

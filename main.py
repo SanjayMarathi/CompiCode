@@ -103,6 +103,7 @@ class ContestCreate(BaseModel):
     title: str
     description: Optional[str] = None
     mode: str = "standard" 
+    evaluation_mode: Optional[str] = "strict"
     penalty_per_wrong_answer: int = 5
     overall_time_limit: int = 60 
     scheduled_start_time: Optional[str] = None
@@ -336,6 +337,7 @@ def create_contest(contest: ContestCreate, current_user: dict = Depends(get_curr
         "title": contest.title,
         "description": contest.description,
         "mode": contest.mode,
+        "evaluation_mode": contest.evaluation_mode,
         "host_id": current_user["id"],
         "penalty_per_wrong_answer": contest.penalty_per_wrong_answer,
         "overall_time_limit": contest.overall_time_limit,
@@ -505,6 +507,12 @@ def get_contest_info_by_id(contest_id: str):
             data["status"] = "ended"
             asyncio.create_task(manager.broadcast(doc.id, {"type": "CONTEST_ENDED"}))
 
+    host_name = "Unknown"
+    if data.get("host_id"):
+        user_doc = db.collection("users").document(data.get("host_id")).get()
+        if user_doc.exists:
+            host_name = user_doc.to_dict().get("username", "Unknown")
+
     return {
         "id": doc.id,
         "title": data.get("title"),
@@ -515,6 +523,8 @@ def get_contest_info_by_id(contest_id: str):
         "scheduled_start_time": data.get("scheduled_start_time"),
         "status": data.get("status"),
         "server_elapsed_seconds": max(0, elapsed),
+        "evaluation_mode": data.get("evaluation_mode", "strict"),
+        "host_name": host_name,
         "questions": q_data
     }
 
@@ -556,8 +566,15 @@ async def sandbox_test(req: SandboxTestRequest, current_user: dict = Depends(get
     passed = all(res.get("passed", False) for res in eval_results) if eval_results else False
     return {"passed": passed, "results": eval_results}
 
+class CodeSubmission(BaseModel):
+    code: str
+    language: str
+    question_id: str
+    contest_id: str
+    time_taken_seconds: Optional[int] = None
+
 @app.post("/submit")
-async def submit_code(submission: SubmitCode, current_user: dict = Depends(get_current_user)):
+async def submit_code(submission: CodeSubmission, current_user: dict = Depends(get_current_user)):
     contest_doc = db.collection("contests").document(submission.contest_id).get()
     if not contest_doc.exists:
         raise HTTPException(status_code=404, detail="Contest not found")
@@ -618,8 +635,12 @@ async def submit_code(submission: SubmitCode, current_user: dict = Depends(get_c
             eval_results = data.get("results", [])
             for i, res in enumerate(eval_results):
                 if i < len(test_cases):
-                    res["input"] = test_cases[i].get("input_data", "")
-                    res["expected"] = test_cases[i].get("expected_output", "")
+                    if i < 2:
+                        res["input"] = test_cases[i].get("input_data", "")
+                        res["expected"] = test_cases[i].get("expected_output", "")
+                    else:
+                        res["input"] = "Hidden Testcase"
+                        res["expected"] = "Hidden Testcase"
     except httpx.TimeoutException:
         return {"passed": False, "results": [], "error": "Executor timed out. Please try again."}
     except Exception as e:
@@ -628,7 +649,9 @@ async def submit_code(submission: SubmitCode, current_user: dict = Depends(get_c
     passed_all = bool(eval_results) and all(r.get("passed", False) for r in eval_results)
             
     time_taken = 0
-    if contest.get("start_time"):
+    if submission.time_taken_seconds is not None:
+        time_taken = submission.time_taken_seconds
+    elif contest.get("start_time"):
         try:
             start_dt = datetime.fromisoformat(contest.get("start_time").replace('Z', ''))
             time_taken = int((datetime.utcnow() - start_dt).total_seconds())
@@ -640,6 +663,7 @@ async def submit_code(submission: SubmitCode, current_user: dict = Depends(get_c
         "question_id": submission.question_id,
         "contest_id": submission.contest_id,
         "passed": passed_all,
+        "testcases_passed": sum(1 for r in eval_results if r.get("passed", False)),
         "penalty_incurred": 0 if passed_all else contest.get("penalty_per_wrong_answer", 5),
         "time_taken": time_taken,
         "timestamp": datetime.utcnow().isoformat()
@@ -699,14 +723,24 @@ def get_leaderboard(contest_id: str):
     for u in users:
         u_subs = [s for s in subs_list if s.get("user_id") == u["id"]]
         
+        total_testcases = 0
+        total_time_taken = 0
         q_stats = {}
         for qid in question_ids:
             q_subs = [s for s in u_subs if s.get("question_id") == qid]
             wrong = sum(1 for s in q_subs if not s.get("passed", False))
             passed_sub = next((s for s in q_subs if s.get("passed", False)), None)
             solved = passed_sub is not None
+            
+            max_tc = 0
+            if q_subs:
+                max_tc = max((s.get("testcases_passed", 0) for s in q_subs), default=0)
+            total_testcases += max_tc
+            
             time_taken = passed_sub.get("time_taken", 0) if passed_sub else 0
-            q_stats[str(qid)] = {"solved": solved, "wrong_count": wrong, "time_taken": time_taken}
+            total_time_taken += time_taken
+            
+            q_stats[str(qid)] = {"solved": solved, "wrong_count": wrong, "time_taken": time_taken, "testcases_passed": max_tc}
 
         passed_qids = list(set(s.get("question_id") for s in u_subs if s.get("passed", False)))
         score = sum(points_map.get(qid, 0) for qid in passed_qids)
@@ -717,11 +751,18 @@ def get_leaderboard(contest_id: str):
             "score": score,
             "penalty": total_penalty,
             "solved_count": len(passed_qids),
+            "total_testcases": total_testcases,
+            "total_time": total_time_taken,
             "solved_question_ids": passed_qids,
             "question_stats": q_stats
         })
 
-    leaderboard.sort(key=lambda x: (-x["score"], x["penalty"]))
+    eval_mode = contest.get("evaluation_mode", "strict")
+    if eval_mode == "partial":
+        leaderboard.sort(key=lambda x: (-x["total_testcases"], x["total_time"], x["penalty"]))
+    else:
+        leaderboard.sort(key=lambda x: (-x["solved_count"], x["total_time"], -x["total_testcases"], x["penalty"]))
+        
     return leaderboard
 
 @app.get("/contests/{contest_id}/my-solved")

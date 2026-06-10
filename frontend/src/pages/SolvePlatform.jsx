@@ -160,10 +160,13 @@ export default function SolvePlatform() {
              const elapsed = Math.floor((Date.now() - start) / 1000);
              if (elapsed >= timeLimit) {
                  setElapsedSeconds(timeLimit);
-                 setStatus('Time Up! Locked');
+                 setStatus('Time Up! Auto-submitting...');
                  setStatusColor('var(--danger)');
                  setAlreadySolved(true);
                  clearInterval(interval);
+                 if (executeSubmissionRef.current) {
+                     executeSubmissionRef.current(null, true);
+                 }
              } else {
                  setElapsedSeconds(elapsed);
              }
@@ -224,8 +227,13 @@ export default function SolvePlatform() {
     setCode(boilerplates[lang]);
   };
 
-  const executeSubmission = async () => {
-    if (alreadySolved || isSubmitting) return;
+  const executeSubmissionRef = useRef();
+  useEffect(() => {
+    executeSubmissionRef.current = executeSubmission;
+  });
+
+  const executeSubmission = async (e, isAutoSubmit = false) => {
+    if ((alreadySolved && !isAutoSubmit) || isSubmitting) return;
     setIsSubmitting(true);
     setStatus('');
     setStatusColor('var(--text-secondary)');
@@ -383,7 +391,16 @@ export default function SolvePlatform() {
       </div>
       
       <div className="problem-desc">
-        <p style={{ whiteSpace: 'pre-line' }}>{qData ? qData.description : 'Please wait.'}</p>
+        <div style={{ whiteSpace: 'pre-wrap', fontWeight: 600, color: '#fff', fontSize: '0.95rem', lineHeight: '1.6' }}>
+          {qData ? (
+            qData.description.split('\n').map((line, i) => {
+              if (line.trim().startsWith('###')) {
+                return <strong key={i} style={{ display: 'block', marginTop: '1.2rem', marginBottom: '0.4rem', color: 'var(--primary)', fontSize: '1.1rem' }}>{line.replace('###', '').trim()}</strong>;
+              }
+              return <React.Fragment key={i}>{line}{'\n'}</React.Fragment>;
+            })
+          ) : 'Please wait.'}
+        </div>
 
         {qData && qData.test_cases.slice(0, 2).map((tc, idx) => (
           <div key={idx} className="example-block" style={{ marginTop: '1.5rem' }}>

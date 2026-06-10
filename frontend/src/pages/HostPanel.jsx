@@ -11,6 +11,7 @@ export default function HostPanel() {
   const [mode, setMode] = useState('standard');
   const [penalty, setPenalty] = useState(5);
   const [overallLimit, setOverallLimit] = useState(60);
+  const [evaluationMode, setEvaluationMode] = useState('strict');
   const [scheduledStart, setScheduledStart] = useState('');
   const [contestQuestions, setContestQuestions] = useState([]);
   const [showProblemForm, setShowProblemForm] = useState(false);
@@ -161,6 +162,7 @@ export default function HostPanel() {
         title, description: desc, mode,
         penalty_per_wrong_answer: parseInt(penalty),
         overall_time_limit: parseInt(overallLimit),
+        evaluation_mode: evaluationMode,
         scheduled_start_time: scheduledStart ? scheduledStart : null,
         selected_questions: finalSelection
       });

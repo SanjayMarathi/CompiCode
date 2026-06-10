@@ -110,8 +110,12 @@ export default function ContestLayout({ userObj }) {
         const currentElapsed = Math.floor((Date.now() - start) / 1000);
         setElapsedSeconds(currentElapsed);
         if (contest.overall_time_limit && currentElapsed >= contest.overall_time_limit * 60) {
-           setContest(prev => ({ ...prev, status: 'ended' }));
-           setContestStarted(false);
+           if (contest.mode === 'timed') {
+               setContest(prev => ({ ...prev, is_overall_time_up: true }));
+           } else {
+               setContest(prev => ({ ...prev, status: 'ended' }));
+               setContestStarted(false);
+           }
         }
       };
       
@@ -233,6 +237,12 @@ export default function ContestLayout({ userObj }) {
         <div className="glass-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
           <div>
             <h1 style={{ margin: 0 }}>{contest.title} <span className="badge badge-yellow" style={{ marginLeft: '1rem' }}>{meta.label}</span></h1>
+            {contest.host_name && (
+              <div style={{ marginTop: '0.4rem', color: 'var(--text-secondary)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                Hosted by <strong style={{ color: '#fff' }}>{contest.host_name}</strong>
+                <span style={{ color: 'var(--success)', fontSize: '1rem' }}>✓</span>
+              </div>
+            )}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
               <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
                 Access Code: <strong style={{ color: '#fff', cursor: 'pointer', background: '#333', padding: '0.2rem 0.5rem', borderRadius: '4px', letterSpacing: '2px' }} onClick={() => navigator.clipboard.writeText(linkCode)} title="Click to copy">{linkCode}</strong>
@@ -377,7 +387,20 @@ export default function ContestLayout({ userObj }) {
                     ✓ Solved — Review
                   </Link>
                 ) : (
-                  <Link to={`/solve/${contest.id}/${q.id}`} className="btn btn-primary" style={{ padding: '0.5rem 1.5rem' }}>Solve</Link>
+                  (() => {
+                    let isLocked = false;
+                    if (contest.mode === 'timed') {
+                      const lsKey = `contest_${contest.id}_q_${q.id}_start`;
+                      const startedAt = localStorage.getItem(lsKey);
+                      if (!startedAt && contest.is_overall_time_up) {
+                         isLocked = true;
+                      }
+                    }
+                    if (isLocked) {
+                      return <button className="btn btn-secondary" style={{ padding: '0.5rem 1.5rem', opacity: 0.5, cursor: 'not-allowed' }} title="Overall contest time is up. You can only finish questions you already started.">Locked</button>;
+                    }
+                    return <Link to={`/solve/${contest.id}/${q.id}`} className="btn btn-primary" style={{ padding: '0.5rem 1.5rem' }}>Solve</Link>;
+                  })()
                 )}
               </div>
             );
