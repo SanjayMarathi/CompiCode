@@ -96,14 +96,20 @@ export default function ContestLayout({ userObj }) {
   useEffect(() => {
     if (contest && contestStarted && (contest.mode === 'standard' || contest.mode === 'timed')) {
       let start;
-      if (contest.server_elapsed_seconds !== undefined && contest.server_elapsed_seconds !== null) {
-        start = Date.now() - (contest.server_elapsed_seconds * 1000);
-      } else if (contest.start_time) {
-        start = new Date(contest.start_time + 'Z').getTime();
-      } else {
-        const lsKey = `contest_${contest.id}_start`;
+      if (contest.mode === 'timed') {
+        const lsKey = `contest_${contest.id}_start_individual`;
         if (!localStorage.getItem(lsKey)) localStorage.setItem(lsKey, Date.now().toString());
         start = parseInt(localStorage.getItem(lsKey));
+      } else {
+        if (contest.server_elapsed_seconds !== undefined && contest.server_elapsed_seconds !== null) {
+          start = Date.now() - (contest.server_elapsed_seconds * 1000);
+        } else if (contest.start_time) {
+          start = new Date(contest.start_time + 'Z').getTime();
+        } else {
+          const lsKey = `contest_${contest.id}_start`;
+          if (!localStorage.getItem(lsKey)) localStorage.setItem(lsKey, Date.now().toString());
+          start = parseInt(localStorage.getItem(lsKey));
+        }
       }
       
       const updateTimer = () => {
