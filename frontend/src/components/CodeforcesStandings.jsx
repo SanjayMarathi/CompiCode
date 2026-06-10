@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function CodeforcesStandings({ leaderboard, questions, title }) {
+export default function CodeforcesStandings({ leaderboard, questions, title, evaluationMode }) {
   const formatTimeStr = (totalSeconds) => {
     if (!totalSeconds) return '00:00:00';
     const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
@@ -17,7 +17,7 @@ export default function CodeforcesStandings({ leaderboard, questions, title }) {
           <tr style={{ borderBottom: '1px solid #333', background: '#111' }}>
             <th style={{ padding: '1rem', textAlign: 'left', color: '#999', fontWeight: 500, width: '60px' }}>Rank</th>
             <th style={{ padding: '1rem', textAlign: 'left', color: '#999', fontWeight: 500 }}>Name</th>
-            <th style={{ padding: '1rem', textAlign: 'center', color: '#999', fontWeight: 500, width: '80px' }}>Score</th>
+            <th style={{ padding: '1rem', textAlign: 'center', color: '#999', fontWeight: 500, width: '100px' }}>Score</th>
             <th style={{ padding: '1rem', textAlign: 'center', color: '#999', fontWeight: 500, width: '120px' }}>Finish Time</th>
             {(questions || []).map((q, i) => (
               <th key={q.id} style={{ padding: '1rem', textAlign: 'center', color: '#999', fontWeight: 500 }}>Q{i+1} ({q.points || 10})</th>
@@ -33,24 +33,54 @@ export default function CodeforcesStandings({ leaderboard, questions, title }) {
               <td style={{ padding: '1rem' }}>
                 <strong style={{ color: '#fff', fontSize: '0.95rem' }}>{l.username}</strong>
               </td>
-              <td style={{ padding: '1rem', textAlign: 'center', color: '#fff', fontWeight: 600 }}>{l.solved_count ?? l.solved_question_ids?.length ?? 0}</td>
-              <td style={{ padding: '1rem', textAlign: 'center', color: '#aaa', fontFamily: 'Consolas, monospace' }}>{formatTimeStr(l.penalty * 60)}</td>
+              <td style={{ padding: '1rem', textAlign: 'center' }}>
+                {evaluationMode === 'partial' ? (
+                  <div>
+                    <div style={{ color: 'var(--secondary)', fontWeight: 700, fontSize: '1.05rem' }}>{l.total_testcases || 0} <span style={{fontSize:'0.75rem', fontWeight:500}}>TCs</span></div>
+                    <div style={{ color: '#888', fontSize: '0.8rem' }}>{l.solved_count ?? l.solved_question_ids?.length ?? 0} Solved</div>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '1.05rem' }}>{l.solved_count ?? l.solved_question_ids?.length ?? 0} <span style={{fontSize:'0.75rem', fontWeight:500}}>Solved</span></div>
+                    {(l.total_testcases > 0) && <div style={{ color: '#888', fontSize: '0.8rem' }}>{l.total_testcases} TCs</div>}
+                  </div>
+                )}
+              </td>
+              <td style={{ padding: '1rem', textAlign: 'center', color: '#aaa', fontFamily: 'Consolas, monospace' }}>
+                <div style={{ color: '#fff' }}>{formatTimeStr(l.total_time || 0)}</div>
+                {l.penalty > 0 && <div style={{ color: 'var(--danger)', fontSize: '0.8rem' }}>+{l.penalty} penalty</div>}
+              </td>
               {(questions || []).map((q) => {
                 const stat = l.question_stats?.[String(q.id)];
                 if (!stat) return <td key={q.id} style={{ padding: '1rem', textAlign: 'center', color: '#444' }}></td>;
-                if (stat.solved) return (
-                  <td key={q.id} style={{ padding: '1rem', textAlign: 'center' }}>
-                    <div style={{ color: 'var(--success)', fontFamily: 'Consolas, monospace', marginBottom: '0.2rem' }}>
-                      {formatTimeStr(stat.time_taken || 0)}
-                    </div>
-                    {stat.wrong_count > 0 && <div style={{ color: 'var(--danger)', fontSize: '0.75rem', fontWeight: 600 }}>+{stat.wrong_count} fails</div>}
-                  </td>
-                );
-                if (stat.wrong_count > 0) return (
-                  <td key={q.id} style={{ padding: '1rem', textAlign: 'center' }}>
-                    <div style={{ color: 'var(--danger)', fontSize: '0.8rem', fontWeight: 600 }}>-{stat.wrong_count}</div>
-                  </td>
-                );
+                
+                if (stat.solved || stat.testcases_passed > 0 || stat.wrong_count > 0) {
+                  return (
+                    <td key={q.id} style={{ padding: '1rem', textAlign: 'center' }}>
+                      {stat.solved ? (
+                        <div style={{ color: 'var(--success)', fontFamily: 'Consolas, monospace', marginBottom: '0.2rem' }}>
+                          {formatTimeStr(stat.time_taken || 0)}
+                        </div>
+                      ) : stat.testcases_passed > 0 ? (
+                        <div style={{ color: 'var(--secondary)', fontSize: '0.9rem', fontWeight: 700, marginBottom: '0.2rem' }}>
+                          {stat.testcases_passed} TCs
+                        </div>
+                      ) : (
+                        <div style={{ color: 'var(--danger)', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.2rem' }}>
+                          -{stat.wrong_count}
+                        </div>
+                      )}
+                      
+                      {stat.solved && stat.testcases_passed > 0 && (
+                        <div style={{ color: 'rgba(0,255,0,0.6)', fontSize: '0.75rem', marginTop: '2px', fontWeight: 600 }}>{stat.testcases_passed} TCs</div>
+                      )}
+                      
+                      {(stat.solved || stat.testcases_passed > 0) && stat.wrong_count > 0 && (
+                        <div style={{ color: 'var(--danger)', fontSize: '0.75rem', fontWeight: 600, marginTop: '2px' }}>+{stat.wrong_count} fails</div>
+                      )}
+                    </td>
+                  );
+                }
                 return <td key={q.id} style={{ padding: '1rem', textAlign: 'center', color: '#444' }}></td>;
               })}
             </tr>

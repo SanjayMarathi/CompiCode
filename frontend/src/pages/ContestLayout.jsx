@@ -224,7 +224,7 @@ export default function ContestLayout({ userObj }) {
         </div>
         <div className="glass-panel" style={{ width: '100%' }}>
           <h3 style={{ marginBottom: '1rem' }}>Final Standings</h3>
-          <CodeforcesStandings leaderboard={leaderboard} questions={contest.questions} />
+          <CodeforcesStandings leaderboard={leaderboard} questions={contest.questions} evaluationMode={contest.evaluation_mode} />
         </div>
       </div>
     );
@@ -318,7 +318,7 @@ export default function ContestLayout({ userObj }) {
 
           <div className="glass-panel" style={{ width: '100%' }}>
             <h3 style={{ marginBottom: '1rem' }}>Standings</h3>
-            <CodeforcesStandings leaderboard={leaderboard} questions={contest.questions} />
+            <CodeforcesStandings leaderboard={leaderboard} questions={contest.questions} evaluationMode={contest.evaluation_mode} />
           </div>
         </div>
       </div>
@@ -409,7 +409,7 @@ export default function ContestLayout({ userObj }) {
         
         <div className="glass-panel" style={{ width: '100%' }}>
           <h3 style={{ marginBottom: '1rem' }}>Standings</h3>
-          <CodeforcesStandings leaderboard={leaderboard} questions={contest.questions} />
+          <CodeforcesStandings leaderboard={leaderboard} questions={contest.questions} evaluationMode={contest.evaluation_mode} />
         </div>
       </div>
 
