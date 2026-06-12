@@ -696,7 +696,13 @@ def join_contest(contest_id: str, current_user: dict = Depends(get_current_user)
 
     existing = db.collection("participants").where(filter=FieldFilter("contest_id", "==", contest_id))\
         .where(filter=FieldFilter("user_id", "==", current_user["id"])).limit(1).stream()
-    if not next(existing, None):
+    existing_doc = next(existing, None)
+    if existing_doc:
+        doc_data = existing_doc.to_dict()
+        if doc_data.get("status") == "rejected":
+            return {"success": False, "status": "rejected"}
+        return {"success": True, "status": doc_data.get("status", "accepted")}
+    else:
         db.collection("participants").add({
             "contest_id": contest_id,
             "user_id": current_user["id"],
@@ -754,7 +760,7 @@ def reject_participant(contest_id: str, user_id: str, current_user: dict = Depen
         .where(filter=FieldFilter("user_id", "==", user_id)).limit(1).stream()
     p_doc = next(p_docs, None)
     if p_doc:
-        p_doc.reference.delete()
+        p_doc.reference.update({"status": "rejected"})
     return {"success": True}
 
 @app.delete("/contests/{contest_id}/kick/{user_id}")
@@ -873,6 +879,7 @@ def get_leaderboard(contest_id: str):
         total_penalty = sum(s.get("penalty_incurred", 0) for s in u_subs)
 
         leaderboard.append({
+            "user_id": u.get("id"),
             "username": u.get("username"),
             "score": round(total_obtained_points, 2),
             "total_points": total_contest_points,

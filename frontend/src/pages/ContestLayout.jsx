@@ -100,6 +100,7 @@ export default function ContestLayout({ userObj }) {
       if (!isHost && participantStatus === 'pending') {
         axios.get(`${API_URL}/contests/${contest.id}/my-status`).then(res => {
           if (res.data.status === 'accepted') setParticipantStatus('accepted');
+          else if (res.data.status === 'rejected') setParticipantStatus('rejected');
         }).catch(() => {});
       }
       if (isHost && contest.visibility === 'private') {
@@ -266,6 +267,16 @@ export default function ContestLayout({ userObj }) {
         <div className="loader" style={{ marginBottom: '1rem', width: '50px', height: '50px', border: '5px solid rgba(255,123,0,0.3)', borderTop: '5px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
         <h2 className="pulse-text" style={{ color: 'var(--primary)', marginBottom: '0.5rem' }}>Waiting for Approval...</h2>
         <p style={{ color: 'var(--text-secondary)' }}>This is a private contest. Please wait for the host to accept your join request.</p>
+      </div>
+    );
+  }
+
+  if (!isHost && participantStatus === 'rejected') {
+    return (
+      <div className="container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <h2 style={{ color: 'var(--danger)', marginBottom: '0.5rem' }}>Access Denied</h2>
+        <p style={{ color: 'var(--text-secondary)' }}>Your request to join this contest was rejected by the host.</p>
+        <button className="btn btn-secondary" onClick={() => navigate('/dashboard')} style={{ marginTop: '1rem' }}>Return to Dashboard</button>
       </div>
     );
   }
