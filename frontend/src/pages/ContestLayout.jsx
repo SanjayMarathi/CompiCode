@@ -50,12 +50,16 @@ export default function ContestLayout({ userObj }) {
         }
         setContest(data);
         if (data.status === 'active') setContestStarted(true);
-        try {
-          const joinRes = await axios.post(`${API_URL}/contests/${data.id}/join`);
-          if (joinRes && joinRes.data) setParticipantStatus(joinRes.data.status);
-        } catch(e) {
-          const statusRes = await axios.get(`${API_URL}/contests/${data.id}/my-status`).catch(() => {});
-          if (statusRes && statusRes.data) setParticipantStatus(statusRes.data.status);
+        if (!isHost && data.status !== 'ended') {
+          try {
+            const joinRes = await axios.post(`${API_URL}/contests/${data.id}/join`);
+            if (joinRes && joinRes.data) setParticipantStatus(joinRes.data.status);
+          } catch(e) {
+            const statusRes = await axios.get(`${API_URL}/contests/${data.id}/my-status`).catch(() => {});
+            if (statusRes && statusRes.data) setParticipantStatus(statusRes.data.status);
+          }
+        } else if (data.status === 'ended') {
+          setParticipantStatus('accepted'); // let them view the leaderboard directly
         }
         fetchLeaderboard(data.id);
         fetchMySolved(data.id);
@@ -457,10 +461,19 @@ export default function ContestLayout({ userObj }) {
       </div>
 
       {/* Late joiner info banner */}
-      {isLateJoiner && (
+      {isLateJoiner && contest.mode !== 'sudden_death' && (
         <div style={{ padding: '0.75rem 1.25rem', background: 'rgba(255,204,0,0.08)', border: '1px solid rgba(255,204,0,0.3)', borderRadius: '6px', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <span style={{ fontSize: '1.2rem' }}>⚡</span>
           <p style={{ color: 'var(--secondary)', margin: 0, fontSize: '0.9rem' }}>Contest is already in progress. You can still participate — pick a problem and start solving!</p>
+        </div>
+      )}
+
+      {/* Enter Arena button for active Sudden Death contests */}
+      {contestStarted && contest.mode === 'sudden_death' && (
+        <div style={{ textAlign: 'center', padding: '3rem', background: 'rgba(255,123,0,0.1)', border: '1px solid #ff7b00', borderRadius: '8px', marginBottom: '2rem' }}>
+          <h2 style={{ color: '#ff7b00', marginBottom: '1rem' }}>Sudden Death is Active!</h2>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>The match is currently ongoing. Jump into the arena to participate.</p>
+          <button className="btn btn-primary" onClick={() => navigate(`/solve/${contest.id}/sudden-death`)} style={{ padding: '1rem 3rem', fontSize: '1.2rem' }}>Enter Arena</button>
         </div>
       )}
 
