@@ -86,6 +86,9 @@ export default function SolvePlatform() {
       const msg = JSON.parse(event.data);
       if (msg.type === 'CONTEST_ENDED') {
         navigate(`/contest/${contestId}`);
+      } else if (msg.type === 'KICK_USER' && currentUser && msg.user_id === currentUser.id) {
+        alert("You have been kicked from the contest by the host.");
+        navigate('/dashboard');
       } else if (isSuddenDeath) {
         if (msg.type === 'SYNC_STATE') {
           setSdState(msg.data);
@@ -101,7 +104,7 @@ export default function SolvePlatform() {
       if (ws.current) ws.current.close();
       if (roundCountdownRef.current) clearInterval(roundCountdownRef.current);
     };
-  }, [contestId, isSuddenDeath, navigate]);
+  }, [contestId, isSuddenDeath, navigate, currentUser]);
 
   const endContest = async () => {
     try {
@@ -109,6 +112,13 @@ export default function SolvePlatform() {
       setShowEndConfirm(false);
       navigate(`/contest/${contestId}`);
     } catch(e) { alert('Failed to end contest'); setShowEndConfirm(false); }
+  };
+
+  const handleKick = async (uid) => {
+    if (window.confirm('Are you sure you want to kick this user? Their submissions will be deleted.')) {
+      await axios.delete(`${API_URL}/contests/${contestId}/kick/${uid}`);
+      axios.get(`${API_URL}/contests/${contestId}/leaderboard`).then(res => setFinalLeaderboard(res.data));
+    }
   };
 
   // Elapsed time counter for standard/timed modes
@@ -276,7 +286,7 @@ export default function SolvePlatform() {
       <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', fontSize: '1rem' }}>The host will initiate the match shortly.</p>
       {finalLeaderboard.length > 0 && (
         <div className="glass-panel" style={{ width: '100%', maxWidth: '900px', textAlign: 'left' }}>
-          <CodeforcesStandings leaderboard={finalLeaderboard} questions={contestInfo?.questions} title="Current Standings" />
+          <CodeforcesStandings leaderboard={finalLeaderboard} questions={contestInfo?.questions} title="Current Standings" mode="sudden_death" isHost={currentUser && contestInfo && currentUser.id === contestInfo.host_id} onKick={handleKick} />
         </div>
       )}
     </div>;
@@ -294,7 +304,7 @@ export default function SolvePlatform() {
         </div>
       </div>
       <div className="glass-panel" style={{ width: '100%', maxWidth: '900px', textAlign: 'left' }}>
-        <CodeforcesStandings leaderboard={finalLeaderboard} questions={contestInfo?.questions} title="Standings" />
+        <CodeforcesStandings leaderboard={finalLeaderboard} questions={contestInfo?.questions} title="Standings" mode="sudden_death" isHost={currentUser && contestInfo && currentUser.id === contestInfo.host_id} onKick={handleKick} />
       </div>
     </div>;
   }
@@ -304,7 +314,7 @@ export default function SolvePlatform() {
       <h1 style={{ color: 'var(--primary)', fontSize: '4rem', marginBottom: '0.5rem' }}>Match Over</h1>
       <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Final results below</p>
       <div className="glass-panel" style={{ width: '100%', maxWidth: '900px', textAlign: 'left', marginBottom: '1.5rem' }}>
-        <CodeforcesStandings leaderboard={finalLeaderboard} questions={contestInfo?.questions} title="Final Standings" />
+        <CodeforcesStandings leaderboard={finalLeaderboard} questions={contestInfo?.questions} title="Final Standings" mode="sudden_death" isHost={currentUser && contestInfo && currentUser.id === contestInfo.host_id} onKick={handleKick} />
       </div>
       <button className="btn btn-secondary" onClick={() => navigate('/')} style={{ padding: '0.75rem 2rem' }}>Return to Dashboard</button>
     </div>;

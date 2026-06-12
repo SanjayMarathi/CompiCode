@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function CodeforcesStandings({ leaderboard, questions, title, evaluationMode }) {
+export default function CodeforcesStandings({ leaderboard, questions, title, evaluationMode, isHost, onKick, mode }) {
   const formatTimeStr = (totalSeconds) => {
     if (!totalSeconds) return '00:00:00';
     const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
@@ -21,14 +21,15 @@ export default function CodeforcesStandings({ leaderboard, questions, title, eva
             <th style={{ padding: '1rem', textAlign: 'center', color: '#999', fontWeight: 500, width: '110px' }}>Solved</th>
             <th style={{ padding: '1rem', textAlign: 'center', color: '#999', fontWeight: 500, width: '110px' }}>Testcases</th>
             <th style={{ padding: '1rem', textAlign: 'center', color: '#999', fontWeight: 500, width: '120px' }}>Finish Time</th>
-            {(questions || []).map((q, i) => (
+            {mode !== 'sudden_death' && (questions || []).map((q, i) => (
               <th key={q.id} style={{ padding: '1rem', textAlign: 'center', color: '#999', fontWeight: 500 }}>Q{i+1} ({q.points || 10})</th>
             ))}
+            {isHost && <th style={{ padding: '1rem', textAlign: 'center', color: '#999', fontWeight: 500, width: '80px' }}>Action</th>}
           </tr>
         </thead>
         <tbody>
           {leaderboard.length === 0 ? (
-            <tr><td colSpan={6 + (questions || []).length} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem' }}>No submissions yet</td></tr>
+            <tr><td colSpan={6 + (mode !== 'sudden_death' ? (questions || []).length : 0) + (isHost ? 1 : 0)} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem' }}>No submissions yet</td></tr>
           ) : leaderboard.map((l, idx) => (
             <tr key={idx} style={{ borderBottom: '1px solid #222', background: idx % 2 === 0 ? '#1a1a1a' : '#1e1e1e' }}>
               <td style={{ padding: '1rem', color: idx < 3 ? 'var(--primary)' : '#fff', fontWeight: 700 }}>{idx + 1}</td>
@@ -54,7 +55,7 @@ export default function CodeforcesStandings({ leaderboard, questions, title, eva
                 <div style={{ color: '#fff' }}>{formatTimeStr(l.total_time || 0)}</div>
                 {l.penalty > 0 && <div style={{ color: 'var(--danger)', fontSize: '0.8rem' }}>+{l.penalty} penalty</div>}
               </td>
-              {(questions || []).map((q) => {
+              {mode !== 'sudden_death' && (questions || []).map((q) => {
                 const stat = l.question_stats?.[String(q.id)];
                 if (!stat) return <td key={q.id} style={{ padding: '1rem', textAlign: 'center', color: '#444' }}></td>;
                 
@@ -87,6 +88,11 @@ export default function CodeforcesStandings({ leaderboard, questions, title, eva
                 }
                 return <td key={q.id} style={{ padding: '1rem', textAlign: 'center', color: '#444' }}></td>;
               })}
+              {isHost && (
+                <td style={{ padding: '1rem', textAlign: 'center' }}>
+                  <button className="btn btn-danger" onClick={() => onKick(l.user_id)} style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}>Kick</button>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

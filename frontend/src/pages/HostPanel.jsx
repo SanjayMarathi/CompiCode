@@ -9,6 +9,7 @@ export default function HostPanel() {
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
   const [mode, setMode] = useState('standard');
+  const [visibility, setVisibility] = useState('public');
   const [penalty, setPenalty] = useState(5);
   const [overallLimit, setOverallLimit] = useState(60);
   const [evaluationMode, setEvaluationMode] = useState('strict');
@@ -160,6 +161,7 @@ export default function HostPanel() {
       }
       const res = await axios.post(`${API_URL}/contests`, {
         title, description: desc, mode,
+        visibility,
         penalty_per_wrong_answer: parseInt(penalty),
         overall_time_limit: parseInt(overallLimit),
         evaluation_mode: evaluationMode,
@@ -206,6 +208,13 @@ export default function HostPanel() {
                 <option value="standard">Standard</option>
                 <option value="sudden_death">Sudden Death</option>
                 <option value="timed">Timed Mode</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Visibility</label>
+              <select className="form-input" value={visibility} onChange={e => setVisibility(e.target.value)}>
+                <option value="public">Public (Anyone with link can join)</option>
+                <option value="private">Private (Host must approve join requests)</option>
               </select>
             </div>
             <div style={{ padding: '0.75rem', background: 'rgba(0,0,0,0.3)', borderLeft: `3px solid ${MODE_INFO[mode].color}`, borderRadius: '4px', marginBottom: '1rem' }}>

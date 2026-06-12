@@ -104,6 +104,7 @@ class ContestCreate(BaseModel):
     description: Optional[str] = None
     mode: str = "standard" 
     evaluation_mode: Optional[str] = "strict"
+    visibility: str = "public"
     penalty_per_wrong_answer: int = 5
     overall_time_limit: int = 60 
     scheduled_start_time: Optional[str] = None
@@ -338,6 +339,7 @@ def create_contest(contest: ContestCreate, current_user: dict = Depends(get_curr
         "description": contest.description,
         "mode": contest.mode,
         "evaluation_mode": contest.evaluation_mode,
+        "visibility": contest.visibility,
         "host_id": current_user["id"],
         "penalty_per_wrong_answer": contest.penalty_per_wrong_answer,
         "overall_time_limit": contest.overall_time_limit,
@@ -395,6 +397,7 @@ def get_contest(link_code: str):
         "title": data.get("title"),
         "description": data.get("description"),
         "mode": data.get("mode"),
+        "visibility": data.get("visibility", "public"),
         "status": data.get("status"),
         "start_time": data.get("start_time"),
         "scheduled_start_time": data.get("scheduled_start_time"),
@@ -517,6 +520,7 @@ def get_contest_info_by_id(contest_id: str):
         "id": doc.id,
         "title": data.get("title"),
         "mode": data.get("mode"),
+        "visibility": data.get("visibility", "public"),
         "overall_time_limit": data.get("overall_time_limit"),
         "penalty_per_wrong_answer": data.get("penalty_per_wrong_answer"),
         "start_time": data.get("start_time"),
@@ -680,14 +684,101 @@ async def submit_code(submission: CodeSubmission, current_user: dict = Depends(g
 
 @app.post("/contests/{contest_id}/join")
 def join_contest(contest_id: str, current_user: dict = Depends(get_current_user)):
+    contest_doc = db.collection("contests").document(contest_id).get()
+    if not contest_doc.exists:
+        raise HTTPException(status_code=404, detail="Contest not found")
+    contest = contest_doc.to_dict()
+    if contest.get("status") == "ended":
+        raise HTTPException(status_code=400, detail="Cannot join an ended contest")
+        
+    visibility = contest.get("visibility", "public")
+    participant_status = "pending" if visibility == "private" else "accepted"
+
     existing = db.collection("participants").where(filter=FieldFilter("contest_id", "==", contest_id))\
         .where(filter=FieldFilter("user_id", "==", current_user["id"])).limit(1).stream()
     if not next(existing, None):
         db.collection("participants").add({
             "contest_id": contest_id,
             "user_id": current_user["id"],
+            "status": participant_status,
             "joined_at": datetime.utcnow().isoformat()
         })
+    return {"success": True, "status": participant_status}
+
+@app.get("/contests/{contest_id}/my-status")
+def my_status(contest_id: str, current_user: dict = Depends(get_current_user)):
+    p_docs = db.collection("participants").where(filter=FieldFilter("contest_id", "==", contest_id))\
+        .where(filter=FieldFilter("user_id", "==", current_user["id"])).limit(1).stream()
+    p_doc = next(p_docs, None)
+    if not p_doc:
+        return {"status": "none"}
+    return {"status": p_doc.to_dict().get("status", "accepted")}
+
+@app.get("/contests/{contest_id}/pending")
+def get_pending_participants(contest_id: str, current_user: dict = Depends(get_current_user)):
+    contest_doc = db.collection("contests").document(contest_id).get()
+    if not contest_doc.exists or contest_doc.to_dict().get("host_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    pending = db.collection("participants").where(filter=FieldFilter("contest_id", "==", contest_id))\
+        .where(filter=FieldFilter("status", "==", "pending")).stream()
+    
+    users = []
+    for p in pending:
+        u_id = p.to_dict().get("user_id")
+        u_doc = db.collection("users").document(u_id).get()
+        if u_doc.exists:
+            users.append({"id": u_id, "username": u_doc.to_dict().get("username"), "doc_id": p.id})
+    return users
+
+@app.post("/contests/{contest_id}/accept/{user_id}")
+def accept_participant(contest_id: str, user_id: str, current_user: dict = Depends(get_current_user)):
+    contest_doc = db.collection("contests").document(contest_id).get()
+    if not contest_doc.exists or contest_doc.to_dict().get("host_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+        
+    p_docs = db.collection("participants").where(filter=FieldFilter("contest_id", "==", contest_id))\
+        .where(filter=FieldFilter("user_id", "==", user_id)).limit(1).stream()
+    p_doc = next(p_docs, None)
+    if p_doc:
+        p_doc.reference.update({"status": "accepted"})
+    return {"success": True}
+
+@app.post("/contests/{contest_id}/reject/{user_id}")
+def reject_participant(contest_id: str, user_id: str, current_user: dict = Depends(get_current_user)):
+    contest_doc = db.collection("contests").document(contest_id).get()
+    if not contest_doc.exists or contest_doc.to_dict().get("host_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+        
+    p_docs = db.collection("participants").where(filter=FieldFilter("contest_id", "==", contest_id))\
+        .where(filter=FieldFilter("user_id", "==", user_id)).limit(1).stream()
+    p_doc = next(p_docs, None)
+    if p_doc:
+        p_doc.reference.delete()
+    return {"success": True}
+
+@app.delete("/contests/{contest_id}/kick/{user_id}")
+async def kick_participant(contest_id: str, user_id: str, current_user: dict = Depends(get_current_user)):
+    contest_doc = db.collection("contests").document(contest_id).get()
+    if not contest_doc.exists or contest_doc.to_dict().get("host_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+        
+    # Delete participant
+    p_docs = db.collection("participants").where(filter=FieldFilter("contest_id", "==", contest_id))\
+        .where(filter=FieldFilter("user_id", "==", user_id)).limit(1).stream()
+    p_doc = next(p_docs, None)
+    if p_doc:
+        p_doc.reference.delete()
+        
+    # Delete submissions
+    subs = db.collection("submissions").where(filter=FieldFilter("contest_id", "==", contest_id))\
+        .where(filter=FieldFilter("user_id", "==", user_id)).stream()
+    for s in subs:
+        s.reference.delete()
+        
+    # Broadcast kick event
+    await manager.broadcast(contest_id, {"type": "KICK_USER", "user_id": user_id})
+        
     return {"success": True}
 
 @app.get("/contests/{contest_id}/leaderboard")
@@ -714,7 +805,11 @@ def get_leaderboard(contest_id: str):
     total_contest_tcs = sum(tcs_map.values())
 
     participants = db.collection("participants").where(filter=FieldFilter("contest_id", "==", contest_id)).stream()
-    participant_user_ids = [p.to_dict().get("user_id") for p in participants]
+    participant_user_ids = []
+    for p in participants:
+        p_data = p.to_dict()
+        if p_data.get("status", "accepted") == "accepted":
+            participant_user_ids.append(p_data.get("user_id"))
     
     if not participant_user_ids:
         return []
