@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 export default function CodeforcesStandings({ leaderboard, questions, title, evaluationMode, isHost, onKick, mode }) {
+  const [searchQuery, setSearchQuery] = useState('');
+
   const formatTimeStr = (totalSeconds) => {
     if (!totalSeconds) return '00:00:00';
     const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
@@ -9,9 +11,23 @@ export default function CodeforcesStandings({ leaderboard, questions, title, eva
     return `${h}:${m}:${s}`;
   };
 
+  const filteredLeaderboard = leaderboard.filter(l => 
+    l.username.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div style={{ overflowX: 'auto' }}>
-      {title && <h3 style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>{title}</h3>}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+        {title ? <h3 style={{ margin: 0 }}>{title}</h3> : <div></div>}
+        <input 
+          type="text" 
+          className="form-input" 
+          placeholder="Search participant..." 
+          value={searchQuery} 
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{ maxWidth: '250px', padding: '0.3rem 0.8rem', fontSize: '0.9rem' }}
+        />
+      </div>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
         <thead>
           <tr style={{ borderBottom: '2px solid var(--border-color)', background: 'var(--bg-secondary)' }}>
@@ -28,10 +44,10 @@ export default function CodeforcesStandings({ leaderboard, questions, title, eva
           </tr>
         </thead>
         <tbody>
-          {leaderboard.length === 0 ? (
-            <tr><td colSpan={6 + (mode !== 'sudden_death' ? (questions || []).length : 0) + (isHost ? 1 : 0)} style={{ textAlign: 'center', color: 'var(--text-tertiary)', padding: '2rem' }}>No submissions yet</td></tr>
-          ) : leaderboard.map((l, idx) => (
-            <tr key={idx} className="fade-in" style={{ borderBottom: '1px solid var(--border-color)', background: idx % 2 === 0 ? 'var(--panel-bg)' : 'var(--table-stripe)', transition: 'background 0.2s', animationDelay: `${idx * 0.03}s` }}>
+          {filteredLeaderboard.length === 0 ? (
+            <tr><td colSpan={6 + (mode !== 'sudden_death' ? (questions || []).length : 0) + (isHost ? 1 : 0)} style={{ textAlign: 'center', color: 'var(--text-tertiary)', padding: '2rem' }}>{leaderboard.length === 0 ? 'No submissions yet' : 'No matching participants'}</td></tr>
+          ) : filteredLeaderboard.map((l, idx) => (
+            <tr key={l.user_id || idx} style={{ borderBottom: '1px solid var(--border-color)', background: idx % 2 === 0 ? 'var(--panel-bg)' : 'var(--table-stripe)', transition: 'background 0.2s' }}>
               <td style={{ padding: '1rem', color: idx < 3 ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: 700 }}>{idx + 1}</td>
               <td style={{ padding: '1rem' }}>
                 <strong style={{ color: 'var(--text-primary)', fontSize: '0.95rem' }}>{l.username}</strong>

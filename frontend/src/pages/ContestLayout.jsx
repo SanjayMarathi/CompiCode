@@ -7,7 +7,10 @@ import CodeforcesStandings from '../components/CodeforcesStandings';
 export default function ContestLayout({ userObj }) {
   const { linkCode } = useParams();
   const [contest, setContest] = useState(null);
-  const [leaderboard, setLeaderboard] = useState([]);
+  const [leaderboard, setLeaderboard] = useState(() => {
+    const cached = localStorage.getItem(`leaderboard_cache_${linkCode}`);
+    return cached ? JSON.parse(cached) : [];
+  });
   const [contestStarted, setContestStarted] = useState(false);
   const [solvedIds, setSolvedIds] = useState([]);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -150,6 +153,7 @@ export default function ContestLayout({ userObj }) {
     try {
       const res = await axios.get(`${API_URL}/contests/${id}/leaderboard`);
       setLeaderboard(res.data);
+      localStorage.setItem(`leaderboard_cache_${linkCode}`, JSON.stringify(res.data));
     } catch {}
   };
 

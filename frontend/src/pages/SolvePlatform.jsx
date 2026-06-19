@@ -28,7 +28,10 @@ export default function SolvePlatform() {
   
   const [sdState, setSdState] = useState(null);
   const [sdGlobalTimer, setSdGlobalTimer] = useState(null);
-  const [finalLeaderboard, setFinalLeaderboard] = useState([]);
+  const [finalLeaderboard, setFinalLeaderboard] = useState(() => {
+    const cached = localStorage.getItem(`leaderboard_cache_${contestId}`);
+    return cached ? JSON.parse(cached) : [];
+  });
   const [roundCountdown, setRoundCountdown] = useState(10);
   const [contestInfo, setContestInfo] = useState(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -112,7 +115,7 @@ export default function SolvePlatform() {
   const handleKick = async (uid) => {
     if (window.confirm('Are you sure you want to kick this user? Their submissions will be deleted.')) {
       await axios.delete(`${API_URL}/contests/${contestId}/kick/${uid}`);
-      axios.get(`${API_URL}/contests/${contestId}/leaderboard`).then(res => setFinalLeaderboard(res.data));
+      axios.get(`${API_URL}/contests/${contestId}/leaderboard`).then(res => { setFinalLeaderboard(res.data); localStorage.setItem(`leaderboard_cache_${contestId}`, JSON.stringify(res.data)); });
     }
   };
 
@@ -181,9 +184,9 @@ export default function SolvePlatform() {
 
   useEffect(() => {
     if (isSuddenDeath && sdState && sdState.state === 'WAITING_TO_START') {
-      axios.get(`${API_URL}/contests/${contestId}/leaderboard`).then(res => setFinalLeaderboard(res.data));
+      axios.get(`${API_URL}/contests/${contestId}/leaderboard`).then(res => { setFinalLeaderboard(res.data); localStorage.setItem(`leaderboard_cache_${contestId}`, JSON.stringify(res.data)); });
       const interval = setInterval(() => {
-        axios.get(`${API_URL}/contests/${contestId}/leaderboard`).then(res => setFinalLeaderboard(res.data));
+        axios.get(`${API_URL}/contests/${contestId}/leaderboard`).then(res => { setFinalLeaderboard(res.data); localStorage.setItem(`leaderboard_cache_${contestId}`, JSON.stringify(res.data)); });
       }, 5000);
       return () => clearInterval(interval);
     }
@@ -192,7 +195,7 @@ export default function SolvePlatform() {
   useEffect(() => {
     if (isSuddenDeath && sdState) {
       if (sdState.state === 'CONTEST_OVER' || sdState.state === 'ROUND_OVER') {
-        axios.get(`${API_URL}/contests/${contestId}/leaderboard`).then(res => setFinalLeaderboard(res.data));
+        axios.get(`${API_URL}/contests/${contestId}/leaderboard`).then(res => { setFinalLeaderboard(res.data); localStorage.setItem(`leaderboard_cache_${contestId}`, JSON.stringify(res.data)); });
       }
       if (sdState.state === 'ROUND_OVER') {
         setRoundCountdown(10);
