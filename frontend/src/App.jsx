@@ -76,7 +76,9 @@ export default function App() {
       <BackgroundAnimations />
       <nav className="navbar">
         <Link to="/" style={{ textDecoration: 'none' }}>
-          <div className="logo-text" style={{ fontSize: '1.5rem', letterSpacing: '-0.03em' }}>CompiCode</div>
+          <div style={{ fontSize: '1.4rem', letterSpacing: '-0.03em', fontFamily: 'Inter, sans-serif' }}>
+            <span className="text-orange">Compi</span><span className="text-white">Code</span>
+          </div>
         </Link>
         <div className="nav-links">
           <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>

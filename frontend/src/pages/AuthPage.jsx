@@ -42,7 +42,9 @@ export default function AuthPage({ onLogin }) {
         <div className="glass-panel fade-in-up" style={{ width: '100%', maxWidth: '420px', position: 'relative', boxShadow: 'var(--shadow-lg)' }}>
           <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
             <Link to="/" style={{ textDecoration: 'none', display: 'inline-block', marginBottom: '1rem' }}>
-              <div className="logo-text" style={{ fontSize: '2rem' }}>CompiCode</div>
+              <div style={{ fontSize: '1.8rem', letterSpacing: '-0.03em', fontFamily: 'Inter, sans-serif' }}>
+                <span className="text-orange">Compi</span><span className="text-white">Code</span>
+              </div>
             </Link>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{isLogin ? 'Welcome Back' : 'Join the Arena'}</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.25rem' }}>{isLogin ? 'Sign in to continue to CompiCode' : 'Create your account to start competing'}</p>
