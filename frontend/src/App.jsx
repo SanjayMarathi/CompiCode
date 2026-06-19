@@ -81,9 +81,8 @@ export default function App() {
           </div>
         </Link>
         <div className="nav-links">
-          <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
-            <span className="toggle-icon sun-icon">☀️</span>
-            <span className="toggle-icon moon-icon">🌙</span>
+          <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} style={{ padding: '0.4rem 0.8rem', width: 'auto', height: 'auto', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.85rem' }}>
+            {theme === 'dark' ? 'White Theme' : 'Dark Theme'}
           </button>
           {user ? (
             <>

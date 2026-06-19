@@ -307,7 +307,7 @@ export default function SolvePlatform() {
       <div className="glass-panel fade-in-up stagger-1" style={{ width: '100%', maxWidth: '900px', textAlign: 'left', marginBottom: '1.5rem' }}>
         <CodeforcesStandings leaderboard={finalLeaderboard} questions={contestInfo?.questions} title="Final Standings" mode="sudden_death" isHost={currentUser && contestInfo && currentUser.id === contestInfo.host_id} onKick={handleKick} />
       </div>
-      <button className="btn btn-primary fade-in-up stagger-2" onClick={() => navigate('/')} style={{ padding: '0.75rem 2rem' }}>Return to Dashboard →</button>
+      <button className="btn btn-primary fade-in-up stagger-2" onClick={() => navigate('/')} style={{ padding: '0.75rem 2rem' }}>Return to Dashboard</button>
     </div>;
   }
 
@@ -315,7 +315,7 @@ export default function SolvePlatform() {
   const isHost = currentUser && contestInfo && currentUser.id === contestInfo.host_id;
 
   return (
-    <div className="solve-container">
+    <div className="solve-container" style={isFullscreen ? { transform: 'none', animation: 'none' } : {}}>
       <div className="fade-in" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button className="btn btn-secondary" onClick={() => navigate(-1)} style={{ padding: '0.4rem 0.8rem' }}>&larr; Back</button>
@@ -438,7 +438,7 @@ export default function SolvePlatform() {
               disabled={alreadySolved || isSubmitting}
               style={{ padding: '0.5rem 2.5rem', borderRadius: '0', opacity: (alreadySolved || isSubmitting) ? 0.6 : 1, cursor: (alreadySolved || isSubmitting) ? 'not-allowed' : 'pointer' }}
             >
-              {alreadySolved ? '✓ Solved' : isSubmitting ? 'Evaluating...' : 'Submit →'}
+              {alreadySolved ? '✓ Solved' : isSubmitting ? 'Evaluating...' : 'Submit'}
             </button>
           </div>
         </div>

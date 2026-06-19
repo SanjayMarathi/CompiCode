@@ -22,7 +22,7 @@ export default function LandingPage({ user }) {
           </p>
           <div className="fade-in-up" style={{ animationDelay: '0.4s' }}>
             <Link to="/auth" className="btn btn-primary hover-lift" style={{ padding: '1rem 3rem', fontSize: '1.1rem', borderRadius: '8px', textDecoration: 'none', display: 'inline-block', boxShadow: '0 4px 15px var(--primary-subtle)' }}>
-              Start Coding Now →
+              Start Coding Now
             </Link>
           </div>
         </div>

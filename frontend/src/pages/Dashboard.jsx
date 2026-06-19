@@ -15,10 +15,9 @@ export default function Dashboard() {
       try {
         const [hostRes, partRes] = await Promise.all([
           axios.get(`${API_URL}/user/contests/hosted`),
-          axios.get(`${API_URL}/user/contests/participated`)
         ]);
-        setHosted(hostRes.data);
-        setParticipated(partRes.data);
+        setHosted(hostRes.data.sort((a,b) => b.id - a.id));
+        setParticipated(partRes.data.sort((a,b) => b.id - a.id));
       } catch (e) {
         console.error("Failed to load history", e);
       } finally {
@@ -74,13 +73,13 @@ export default function Dashboard() {
             <div className="form-group">
               <input className="form-input" placeholder="8-CHAR CODE" required value={linkCode} onChange={e => setLinkCode(e.target.value)} style={{ fontSize: '1.2rem', letterSpacing: '3px', textAlign: 'center', padding: '0.8rem', fontWeight: 600 }} />
             </div>
-            <button className="btn btn-primary" style={{ width: '100%', padding: '0.75rem' }}>Join →</button>
+            <button className="btn btn-primary" style={{ width: '100%', padding: '0.75rem' }}>Join</button>
           </form>
         </div>
         <div className="glass-panel hover-lift fade-in-up stagger-2" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
           <h3 style={{ fontWeight: 700 }}>Host Contest</h3>
           <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Create a custom workflow, define standard or timed limits, and invite participants.</p>
-          <button className="btn btn-primary" style={{ padding: '0.75rem 2.5rem' }} onClick={() => navigate('/host')}>Create Contest →</button>
+          <button className="btn btn-primary" style={{ padding: '0.75rem 2.5rem' }} onClick={() => navigate('/host')}>Create Contest</button>
         </div>
       </div>
 

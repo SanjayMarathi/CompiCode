@@ -59,7 +59,7 @@ export default function AuthPage({ onLogin }) {
               <label style={{ color: 'var(--text-primary)' }}>Password</label>
               <input className="form-input" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" />
             </div>
-            <button className="btn btn-primary" style={{ width: '100%', marginTop: '1.5rem', padding: '0.8rem', fontSize: '1rem', fontWeight: 600 }}>{isLogin ? 'Sign In →' : 'Create Account →'}</button>
+            <button className="btn btn-primary" style={{ width: '100%', marginTop: '1.5rem', padding: '0.8rem', fontSize: '1rem', fontWeight: 600 }}>{isLogin ? 'Sign In' : 'Create Account'}</button>
           </form>
           
           <div style={{ marginTop: '1.5rem', textAlign: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
