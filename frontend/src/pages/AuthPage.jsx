@@ -41,12 +41,8 @@ export default function AuthPage({ onLogin }) {
         {/* Auth Card */}
         <div className="glass-panel fade-in-up" style={{ width: '100%', maxWidth: '420px', position: 'relative', boxShadow: 'var(--shadow-lg)' }}>
           <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-            <Link to="/" style={{ textDecoration: 'none', display: 'inline-block' }}>
-              <img 
-                src="/compicode-logo.png" 
-                alt="CompiCode Logo" 
-                style={{ width: '60px', height: '60px', objectFit: 'contain', filter: 'drop-shadow(var(--shadow-sm))', marginBottom: '1rem' }}
-              />
+            <Link to="/" style={{ textDecoration: 'none', display: 'inline-block', marginBottom: '1rem' }}>
+              <div className="logo-text" style={{ fontSize: '2rem' }}>CompiCode</div>
             </Link>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{isLogin ? 'Welcome Back' : 'Join the Arena'}</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.25rem' }}>{isLogin ? 'Sign in to continue to CompiCode' : 'Create your account to start competing'}</p>

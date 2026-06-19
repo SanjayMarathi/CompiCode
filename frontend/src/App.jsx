@@ -75,7 +75,9 @@ export default function App() {
     <Router>
       <BackgroundAnimations />
       <nav className="navbar">
-        <Link to="/" className="brand">Compi<span>Code</span></Link>
+        <Link to="/" style={{ textDecoration: 'none' }}>
+          <div className="logo-text" style={{ fontSize: '1.5rem', letterSpacing: '-0.03em' }}>CompiCode</div>
+        </Link>
         <div className="nav-links">
           <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
             <span className="toggle-icon sun-icon">☀️</span>
