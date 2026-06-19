@@ -36,3 +36,4 @@ saved_model/**/* filter=lfs diff=lfs merge=lfs -text
 frontend/node_modules/@rolldown/binding-win32-x64-msvc/rolldown-binding.win32-x64-msvc.node filter=lfs diff=lfs merge=lfs -text
 frontend/dist/favicon.png filter=lfs diff=lfs merge=lfs -text
 frontend/public/favicon.png filter=lfs diff=lfs merge=lfs -text
+*.png filter=lfs diff=lfs merge=lfs -text

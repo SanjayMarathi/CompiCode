@@ -5,7 +5,9 @@ import { API_URL, setAuthToken } from './config';
 
 import AuthRequired from './components/AuthRequired';
 import Footer from './components/Footer';
+import BackgroundAnimations from './components/BackgroundAnimations';
 
+import LandingPage from './pages/LandingPage';
 import AuthPage from './pages/AuthPage';
 import Dashboard from './pages/Dashboard';
 import HostPanel from './pages/HostPanel';
@@ -71,6 +73,7 @@ export default function App() {
 
   return (
     <Router>
+      <BackgroundAnimations />
       <nav className="navbar">
         <Link to="/" className="brand">Compi<span>Code</span></Link>
         <div className="nav-links">
@@ -92,11 +95,11 @@ export default function App() {
       
       <Routes>
         <Route path="/auth" element={user ? <Navigate to="/dashboard" /> : <AuthPage onLogin={setUser}/>} />
-        <Route path="/" element={user ? <Dashboard /> : <AuthPage onLogin={setUser}/>} />
-        <Route path="/dashboard" element={user ? <Dashboard /> : <AuthPage onLogin={setUser}/>} />
-        <Route path="/host" element={user ? <HostPanel /> : <AuthPage onLogin={setUser}/>} />
-        <Route path="/admin" element={user ? (user.is_admin ? <SysAdminPanel /> : <Navigate to="/dashboard" />) : <AuthPage onLogin={setUser}/>} />
-        <Route path="/sysadmin/problemset" element={user ? (user.is_admin ? <SysAdminPanel /> : <Navigate to="/dashboard" />) : <AuthPage onLogin={setUser}/>} />
+        <Route path="/" element={user ? <Dashboard /> : <LandingPage user={user} />} />
+        <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/auth" />} />
+        <Route path="/host" element={user ? <HostPanel /> : <Navigate to="/auth" />} />
+        <Route path="/admin" element={user ? (user.is_admin ? <SysAdminPanel /> : <Navigate to="/dashboard" />) : <Navigate to="/auth" />} />
+        <Route path="/sysadmin/problemset" element={user ? (user.is_admin ? <SysAdminPanel /> : <Navigate to="/dashboard" />) : <Navigate to="/auth" />} />
         <Route path="/contest/:linkCode" element={user ? <ContestLayout userObj={user} /> : <AuthRequired />} />
         <Route path="/solve/:contestId/:questionId" element={user ? <SolvePlatform /> : <AuthRequired />} />
         <Route path="*" element={<NotFound />} />
