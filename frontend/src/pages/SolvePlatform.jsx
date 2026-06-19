@@ -17,7 +17,7 @@ export default function SolvePlatform() {
     return saved !== null ? saved : boilerplates['cpp'];
   });
   const [status, setStatus] = useState('');
-  const [statusColor, setStatusColor] = useState('var(--text-secondary)');
+  const [statusColor, setStatusColor] = useState('#999');
   const [sandboxError, setSandboxError] = useState('');
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [userObj, setUserObj] = useState(null);
@@ -46,7 +46,7 @@ export default function SolvePlatform() {
       setQData(null);
       setAlreadySolved(false);
       setStatus('');
-      setStatusColor('var(--text-secondary)');
+      setStatusColor('#999');
       setEvalResults(null);
       setIsSubmitting(false);
       setElapsedSeconds(0);
@@ -246,7 +246,7 @@ export default function SolvePlatform() {
     if ((alreadySolved && !isAutoSubmit) || isSubmitting) return;
     setIsSubmitting(true);
     setStatus('');
-    setStatusColor('var(--text-secondary)');
+    setStatusColor('#999');
     setEvalResults(null);
     try {
       const activeQ = qData ? qData.id : questionId;
@@ -282,8 +282,8 @@ export default function SolvePlatform() {
   
   if (isSuddenDeath && sdState && sdState.state === 'WAITING_TO_START') {
     return <div className="sudden-death-overlay">
-      <h1 className="pulse-text" style={{ fontSize: '3rem', color: '#ff7b00', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Waiting for Match Start</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', fontSize: '1rem' }}>The host will initiate the match shortly.</p>
+      <h1 className="pulse-text" style={{ fontSize: '2.5rem', color: '#000', textTransform: 'uppercase', marginBottom: '0.5rem', fontWeight: 800, letterSpacing: '-0.02em' }}>Waiting for Match Start</h1>
+      <p style={{ color: '#999', marginBottom: '2rem', fontSize: '1rem' }}>The host will initiate the match shortly.</p>
       {finalLeaderboard.length > 0 && (
         <div className="glass-panel" style={{ width: '100%', maxWidth: '900px', textAlign: 'left' }}>
           <CodeforcesStandings leaderboard={finalLeaderboard} questions={contestInfo?.questions} title="Current Standings" mode="sudden_death" isHost={currentUser && contestInfo && currentUser.id === contestInfo.host_id} onKick={handleKick} />
@@ -293,14 +293,14 @@ export default function SolvePlatform() {
   }
 
   if (isSuddenDeath && sdState && sdState.state === 'ROUND_OVER') {
-    return <div className="sudden-death-overlay" style={{ background: '#1c1c1c', padding: '2rem' }}>
+    return <div className="sudden-death-overlay" style={{ background: '#fff', padding: '2rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', width: '100%', maxWidth: '900px' }}>
         <div>
-          <h1 style={{ color: '#fff', fontSize: '2.5rem', margin: 0 }}>Round {sdState.current_q_idx + 1} Complete</h1>
-          <p style={{ color: '#00ff41', fontWeight: 600, margin: '0.25rem 0 0', fontSize: '1.1rem' }}>Winner: {sdState.winner || 'No winner'}</p>
+          <h1 style={{ color: '#000', fontSize: '2.5rem', margin: 0, fontWeight: 800 }}>Round {sdState.current_q_idx + 1} Complete</h1>
+          <p style={{ color: 'var(--success)', fontWeight: 600, margin: '0.25rem 0 0', fontSize: '1.1rem' }}>Winner: {sdState.winner || 'No winner'}</p>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>Next round in <strong style={{ color: 'var(--primary)' }}>{roundCountdown}s</strong></div>
+          <div style={{ fontSize: '0.9rem', color: '#999', marginTop: '0.5rem' }}>Next round in <strong style={{ color: '#000' }}>{roundCountdown}s</strong></div>
         </div>
       </div>
       <div className="glass-panel" style={{ width: '100%', maxWidth: '900px', textAlign: 'left' }}>
@@ -310,13 +310,13 @@ export default function SolvePlatform() {
   }
 
   if (isSuddenDeath && sdState && sdState.state === 'CONTEST_OVER') {
-    return <div className="sudden-death-overlay" style={{ background: '#111', padding: '2rem' }}>
-      <h1 style={{ color: 'var(--primary)', fontSize: '4rem', marginBottom: '0.5rem' }}>Match Over</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Final results below</p>
+    return <div className="sudden-death-overlay" style={{ background: '#fff', padding: '2rem' }}>
+      <h1 style={{ color: '#000', fontSize: '3.5rem', marginBottom: '0.5rem', fontWeight: 800, letterSpacing: '-0.03em' }}>Match Over</h1>
+      <p style={{ color: '#999', marginBottom: '2rem' }}>Final results below</p>
       <div className="glass-panel" style={{ width: '100%', maxWidth: '900px', textAlign: 'left', marginBottom: '1.5rem' }}>
         <CodeforcesStandings leaderboard={finalLeaderboard} questions={contestInfo?.questions} title="Final Standings" mode="sudden_death" isHost={currentUser && contestInfo && currentUser.id === contestInfo.host_id} onKick={handleKick} />
       </div>
-      <button className="btn btn-secondary" onClick={() => navigate('/')} style={{ padding: '0.75rem 2rem' }}>Return to Dashboard</button>
+      <button className="btn btn-primary" onClick={() => navigate('/')} style={{ padding: '0.75rem 2rem' }}>Return to Dashboard →</button>
     </div>;
   }
 
@@ -336,24 +336,24 @@ export default function SolvePlatform() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           {isSuddenDeath && sdGlobalTimer !== null && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Round Time:</span>
-              <span style={{ fontSize: '1.2rem', fontWeight: 600, color: '#ff7b00', background: 'var(--panel-bg)', padding: '0.2rem 1rem', borderRadius: '4px', border: '1px solid #ff7b00' }}>
+              <span style={{ fontSize: '0.9rem', color: '#999' }}>Round Time:</span>
+              <span style={{ fontSize: '1.2rem', fontWeight: 600, color: '#000', background: '#f5f5f5', padding: '0.2rem 1rem', borderRadius: '4px', border: '1px solid #eee', fontFamily: 'Consolas, monospace' }}>
                 {formatTime(sdGlobalTimer)}
               </span>
             </div>
           )}
           {!isSuddenDeath && contestInfo && contestInfo.mode === 'standard' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Time Left:</span>
-              <span style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--secondary)', background: 'var(--panel-bg)', padding: '0.2rem 1rem', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
+              <span style={{ fontSize: '0.9rem', color: '#999' }}>Time Left:</span>
+              <span style={{ fontSize: '1.2rem', fontWeight: 600, color: '#000', background: '#f5f5f5', padding: '0.2rem 1rem', borderRadius: '4px', border: '1px solid #eee', fontFamily: 'Consolas, monospace' }}>
                 {formatTime(Math.max(0, contestInfo.overall_time_limit * 60 - elapsedSeconds))}
               </span>
             </div>
           )}
           {!isSuddenDeath && contestInfo && contestInfo.mode === 'timed' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Time Left:</span>
-              <span style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--danger)', background: 'var(--panel-bg)', padding: '0.2rem 1rem', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
+              <span style={{ fontSize: '0.9rem', color: '#999' }}>Time Left:</span>
+              <span style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--danger)', background: '#f5f5f5', padding: '0.2rem 1rem', borderRadius: '4px', border: '1px solid #eee', fontFamily: 'Consolas, monospace' }}>
                 {(() => {
                   const questions = contestInfo.questions || [];
                   const q = questions.find(x => String(x.id) === String(questionId));
@@ -363,7 +363,7 @@ export default function SolvePlatform() {
               </span>
             </div>
           )}
-          {isSuddenDeath && <span className="badge badge-orange">SUDDEN DEATH - ROUND {sdState ? sdState.current_q_idx + 1 : 1}</span>}
+          {isSuddenDeath && <span className="badge badge-orange">SUDDEN DEATH — ROUND {sdState ? sdState.current_q_idx + 1 : 1}</span>}
         </div>
       </div>
 
@@ -380,11 +380,11 @@ export default function SolvePlatform() {
                 style={{
                   padding: '0.4rem 1rem',
                   fontSize: '0.85rem',
-                  background: isActive ? 'var(--primary)' : '#3e3e3e',
-                  color: '#fff',
+                  background: isActive ? '#000' : '#f5f5f5',
+                  color: isActive ? '#fff' : '#555',
                   borderRadius: '4px',
                   textDecoration: 'none',
-                  border: isActive ? '2px solid var(--primary)' : '1px solid var(--border-color)',
+                  border: isActive ? '2px solid #000' : '1px solid var(--border-color)',
                   transition: 'all 0.15s'
                 }}
               >
@@ -396,16 +396,16 @@ export default function SolvePlatform() {
       )}
       
       <div className="problem-title">
-        <h1 style={{ margin: 0 }}>{qData ? qData.title : 'Loading Problem...'}</h1>
+        <h1 style={{ margin: 0, color: '#000' }}>{qData ? qData.title : 'Loading Problem...'}</h1>
         <span className="badge badge-yellow" style={{ marginLeft: '1rem' }}>Problem</span>
       </div>
       
       <div className="problem-desc">
-        <div style={{ whiteSpace: 'pre-wrap', fontWeight: 600, color: '#fff', fontSize: '0.95rem', lineHeight: '1.6' }}>
+        <div style={{ whiteSpace: 'pre-wrap', fontWeight: 500, color: '#333', fontSize: '0.95rem', lineHeight: '1.7' }}>
           {qData ? (
             qData.description.split('\n').map((line, i) => {
               if (line.trim().startsWith('###')) {
-                return <strong key={i} style={{ display: 'block', marginTop: '1.2rem', marginBottom: '0.4rem', color: 'var(--primary)', fontSize: '1.1rem' }}>{line.replace('###', '').trim()}</strong>;
+                return <strong key={i} style={{ display: 'block', marginTop: '1.2rem', marginBottom: '0.4rem', color: '#000', fontSize: '1.1rem' }}>{line.replace('###', '').trim()}</strong>;
               }
               return <React.Fragment key={i}>{line}{'\n'}</React.Fragment>;
             })
@@ -414,14 +414,14 @@ export default function SolvePlatform() {
 
         {qData && qData.test_cases.slice(0, 2).map((tc, idx) => (
           <div key={idx} className="example-block" style={{ marginTop: '1.5rem' }}>
-            <strong style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--primary)' }}>Example {idx + 1}:</strong>
+            <strong style={{ display: 'block', marginBottom: '0.5rem', color: '#000' }}>Example {idx + 1}:</strong>
             <div style={{ marginBottom: '0.5rem' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Input:</span>
-              <pre style={{ marginTop: '0.25rem', background: '#111', padding: '0.75rem', borderRadius: '4px', border: '1px solid #333' }}>{tc.input}</pre>
+              <span style={{ color: '#888' }}>Input:</span>
+              <pre style={{ marginTop: '0.25rem', background: '#f5f5f5', padding: '0.75rem', borderRadius: '4px', border: '1px solid #eee', color: '#333' }}>{tc.input}</pre>
             </div>
             <div>
-              <span style={{ color: 'var(--text-secondary)' }}>Output:</span>
-              <pre style={{ marginTop: '0.25rem', background: '#111', padding: '0.75rem', borderRadius: '4px', border: '1px solid #333' }}>{tc.expected}</pre>
+              <span style={{ color: '#888' }}>Output:</span>
+              <pre style={{ marginTop: '0.25rem', background: '#f5f5f5', padding: '0.75rem', borderRadius: '4px', border: '1px solid #eee', color: '#333' }}>{tc.expected}</pre>
             </div>
           </div>
         ))}
@@ -430,7 +430,7 @@ export default function SolvePlatform() {
       <div className={isFullscreen ? 'editor-fullscreen' : 'editor-wrapper'} style={isFullscreen ? {position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 9999, background: 'var(--editor-bg)', display: 'flex', flexDirection: 'column'} : {}}>
         <div className="editor-toolbar">
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <select className="form-input" value={language} onChange={handleLanguageChange} style={{ width: 'auto', background: '#333', border: '1px solid #444', color: '#ccc', padding: '0.4rem 1rem', borderRadius: '4px' }}>
+            <select className="form-input" value={language} onChange={handleLanguageChange} style={{ width: 'auto', background: '#fff', border: '1px solid #ddd', color: '#333', padding: '0.4rem 1rem', borderRadius: '4px' }}>
               <option value="cpp">C++</option>
               <option value="python">Python</option>
               <option value="java">Java</option>
@@ -440,7 +440,7 @@ export default function SolvePlatform() {
             </button>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <span style={{ fontSize: '1rem', color: statusColor || 'var(--text-secondary)', marginRight: '1.5rem', fontWeight: 700 }}>
+            <span style={{ fontSize: '1rem', color: statusColor || '#999', marginRight: '1.5rem', fontWeight: 700 }}>
               {status}
             </span>
             <button
@@ -449,7 +449,7 @@ export default function SolvePlatform() {
               disabled={alreadySolved || isSubmitting}
               style={{ padding: '0.5rem 2.5rem', borderRadius: '0', opacity: (alreadySolved || isSubmitting) ? 0.6 : 1, cursor: (alreadySolved || isSubmitting) ? 'not-allowed' : 'pointer' }}
             >
-              {alreadySolved ? '✓ Solved' : isSubmitting ? 'Evaluating...' : 'Submit'}
+              {alreadySolved ? '✓ Solved' : isSubmitting ? 'Evaluating...' : 'Submit →'}
             </button>
           </div>
         </div>
@@ -475,17 +475,17 @@ export default function SolvePlatform() {
           <div className="testcase-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
              <span>Console Output</span>
              {(evalResults || qData) && (
-               <span style={{ fontSize: '0.85rem', color: evalResults ? (evalResults.every(r => r.passed) ? 'var(--success)' : (evalResults.some(r => r.passed) ? 'var(--secondary)' : 'var(--danger)')) : 'var(--text-secondary)', fontWeight: 600, background: 'rgba(0,0,0,0.2)', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>
+               <span style={{ fontSize: '0.85rem', color: evalResults ? (evalResults.every(r => r.passed) ? 'var(--success)' : (evalResults.some(r => r.passed) ? '#888' : 'var(--danger)')) : '#bbb', fontWeight: 600, background: '#f0f0f0', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>
                  {evalResults ? evalResults.filter(r => r.passed).length : 0} / {evalResults ? evalResults.length : (qData?.test_cases?.length || 0)} Testcases Passed
                </span>
              )}
           </div>
           <div className="testcase-body">
-            {!evalResults && !isSubmitting && <div style={{ color: '#555' }}>You must hit submit to check your code against all hidden testcases...</div>}
+            {!evalResults && !isSubmitting && <div style={{ color: '#ccc' }}>You must hit submit to check your code against all hidden testcases...</div>}
             {isSubmitting && !evalResults && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem' }}>
-                <div style={{ width: '24px', height: '24px', border: '3px solid rgba(255,123,0,0.3)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite', flexShrink: 0 }}></div>
-                <span style={{ color: 'var(--primary)', fontWeight: 600 }}>Evaluating your submission...</span>
+                <div style={{ width: '24px', height: '24px', border: '3px solid #eee', borderTop: '3px solid #000', borderRadius: '50%', animation: 'spin 1s linear infinite', flexShrink: 0 }}></div>
+                <span style={{ color: '#333', fontWeight: 600 }}>Evaluating your submission...</span>
               </div>
             )}
             {evalResults && (
@@ -499,19 +499,19 @@ export default function SolvePlatform() {
                         Testcase {i + 1} {isHidden ? '(Hidden) ' : ''}{res.passed ? 'Accepted' : (res.error ? 'Error' : 'Wrong Answer')}
                       </div>
                       {!isHidden && (
-                        <div style={{ color: '#ccc', fontFamily: 'Consolas, monospace', fontSize: '0.85rem', lineHeight: '1.6' }}>
+                        <div style={{ color: '#555', fontFamily: 'Consolas, monospace', fontSize: '0.85rem', lineHeight: '1.6' }}>
                           <div style={{ marginBottom: '0.75rem' }}>
-                            <span style={{ color: '#888', display: 'block', marginBottom: '0.25rem' }}>Input:</span>
-                            <pre style={{ margin: 0, background: '#111', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace' }}>{res.input}</pre>
+                            <span style={{ color: '#999', display: 'block', marginBottom: '0.25rem' }}>Input:</span>
+                            <pre style={{ margin: 0, background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace', border: '1px solid #eee', color: '#333' }}>{res.input}</pre>
                           </div>
                           <div style={{ marginBottom: '0.75rem' }}>
-                            <span style={{ color: '#888', display: 'block', marginBottom: '0.25rem' }}>Expected:</span>
-                            <pre style={{ margin: 0, background: '#111', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace' }}>{res.expected}</pre>
+                            <span style={{ color: '#999', display: 'block', marginBottom: '0.25rem' }}>Expected:</span>
+                            <pre style={{ margin: 0, background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace', border: '1px solid #eee', color: '#333' }}>{res.expected}</pre>
                           </div>
                           {!res.error && (
                             <div>
-                              <span style={{ color: '#888', display: 'block', marginBottom: '0.25rem' }}>Actual:</span>
-                              <pre style={{ margin: 0, background: '#111', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace' }}>{res.actual || 'No output'}</pre>
+                              <span style={{ color: '#999', display: 'block', marginBottom: '0.25rem' }}>Actual:</span>
+                              <pre style={{ margin: 0, background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace', border: '1px solid #eee', color: '#333' }}>{res.actual || 'No output'}</pre>
                             </div>
                           )}
                         </div>
@@ -525,8 +525,8 @@ export default function SolvePlatform() {
                     <div style={{ fontWeight: 700, color: 'var(--danger)', marginBottom: '0.8rem', fontSize: '0.9rem' }}>
                       Compilation / Runtime Error Details
                     </div>
-                    <div style={{ color: '#ccc', fontFamily: 'Consolas, monospace', fontSize: '0.85rem', lineHeight: '1.6' }}>
-                      <pre style={{ margin: 0, background: '#111', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace' }}>
+                    <div style={{ color: '#555', fontFamily: 'Consolas, monospace', fontSize: '0.85rem', lineHeight: '1.6' }}>
+                      <pre style={{ margin: 0, background: '#fff5f5', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace', border: '1px solid #fecaca', color: '#991b1b' }}>
                         {evalResults.find(r => r.error).error}
                       </pre>
                     </div>
@@ -539,15 +539,15 @@ export default function SolvePlatform() {
       )}
 
       {showEndConfirm && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(3px)' }}>
-          <div style={{ background: '#1e1e1e', border: '1px solid var(--border-color)', borderRadius: '8px', width: '90%', maxWidth: '400px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', overflow: 'hidden', animation: 'fadeInUp 0.2s ease-out' }}>
-            <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,123,0,0.1)' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)' }}>
+          <div style={{ background: '#fff', border: '1px solid var(--border-color)', borderRadius: '10px', width: '90%', maxWidth: '400px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', overflow: 'hidden', animation: 'fadeInUp 0.2s ease-out' }}>
+            <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-color)' }}>
               <h3 style={{ margin: 0, color: 'var(--danger)', fontSize: '1.1rem' }}>End Contest</h3>
             </div>
-            <div style={{ padding: '1.5rem', color: '#fff', fontSize: '0.95rem', lineHeight: '1.5' }}>
+            <div style={{ padding: '1.5rem', color: '#333', fontSize: '0.95rem', lineHeight: '1.6' }}>
               Are you sure you want to end this contest for everyone?
             </div>
-            <div style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem', background: 'rgba(0,0,0,0.2)' }}>
+            <div style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem', background: '#fafafa', borderTop: '1px solid var(--border-color)' }}>
               <button className="btn btn-secondary" onClick={() => setShowEndConfirm(false)} style={{ padding: '0.4rem 1.5rem' }}>Cancel</button>
               <button className="btn btn-danger" onClick={endContest} style={{ padding: '0.4rem 1.5rem' }}>End Contest</button>
             </div>

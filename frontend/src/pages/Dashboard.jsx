@@ -40,16 +40,16 @@ export default function Dashboard() {
   };
 
   const renderContestRow = (c) => (
-    <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.85rem', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', marginBottom: '0.75rem', border: '1px solid rgba(255,255,255,0.05)' }}>
+    <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: '#fafafa', borderRadius: '8px', marginBottom: '0.75rem', border: '1px solid #f0f0f0', transition: 'all 0.15s' }}>
       <div>
-        <div style={{ fontWeight: 600, color: '#fff', fontSize: '1.05rem', marginBottom: '0.2rem' }}>{c.title}</div>
-        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.2rem' }}>
-          Code: <span style={{ color: '#fff' }}>{c.link_code}</span> &nbsp;|&nbsp; 
-          Mode: <span style={{ color: '#fff', textTransform: 'capitalize' }}>{c.mode.replace('_', ' ')}</span> &nbsp;|&nbsp; 
-          Status: <span style={{ fontWeight: 600, color: c.status === 'ended' ? 'var(--danger)' : c.status === 'active' ? 'var(--success)' : '#aaa' }}>{c.status.toUpperCase()}</span>
+        <div style={{ fontWeight: 600, color: '#111', fontSize: '1.05rem', marginBottom: '0.3rem' }}>{c.title}</div>
+        <div style={{ fontSize: '0.8rem', color: '#999', marginBottom: '0.2rem' }}>
+          Code: <span style={{ color: '#333', fontWeight: 500 }}>{c.link_code}</span> &nbsp;|&nbsp; 
+          Mode: <span style={{ color: '#333', textTransform: 'capitalize', fontWeight: 500 }}>{c.mode.replace('_', ' ')}</span> &nbsp;|&nbsp; 
+          Status: <span style={{ fontWeight: 600, color: c.status === 'ended' ? '#999' : c.status === 'active' ? '#000' : '#aaa' }}>{c.status.toUpperCase()}</span>
         </div>
-        <div style={{ fontSize: '0.75rem', color: '#888' }}>
-          Hosted by: <span style={{ color: 'var(--secondary)' }}>{c.host_name}</span> &nbsp;|&nbsp; 
+        <div style={{ fontSize: '0.75rem', color: '#bbb' }}>
+          Hosted by: <span style={{ color: '#666' }}>{c.host_name}</span> &nbsp;|&nbsp; 
           Date: {formatDate(c.start_time)}
         </div>
       </div>
@@ -59,44 +59,46 @@ export default function Dashboard() {
 
   return (
     <div className="container">
-      <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '3rem', margin: 0 }}>Arena Dashboard</h1>
-        <p style={{ color: 'var(--text-secondary)', maxWidth: '600px', margin: '0.5rem auto', lineHeight: 1.6 }}>
-          Welcome to your competitive programming workspace. You can join an active contest by entering an invite code below, or take the lead and host your own custom challenge for others to participate in.
+      <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+        <h1 style={{ fontSize: '2.5rem', margin: 0, fontWeight: 800, letterSpacing: '-0.02em' }}>Arena Dashboard</h1>
+        <p style={{ color: '#999', maxWidth: '600px', margin: '0.75rem auto', lineHeight: 1.7, fontSize: '1rem' }}>
+          Welcome to your competitive programming workspace. Join an active contest by entering an invite code below, or host your own custom challenge.
         </p>
       </div>
       
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem', marginBottom: '2rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem', marginBottom: '2.5rem' }}>
         <div className="glass-panel">
-          <h3 style={{ color: 'var(--primary)' }}>Join Contest</h3>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>Enter the unique access code assigned to you by the host.</p>
+          <h3 style={{ color: '#000', fontWeight: 700 }}>Join Contest</h3>
+          <p style={{ color: '#999', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Enter the unique access code assigned to you by the host.</p>
           <form onSubmit={joinContest}>
             <div className="form-group">
-              <input className="form-input" placeholder="8-CHAR CODE" required value={linkCode} onChange={e => setLinkCode(e.target.value)} style={{ fontSize: '1.2rem', letterSpacing: '2px', textAlign: 'center' }} />
+              <input className="form-input" placeholder="8-CHAR CODE" required value={linkCode} onChange={e => setLinkCode(e.target.value)} style={{ fontSize: '1.2rem', letterSpacing: '3px', textAlign: 'center', padding: '0.8rem', fontWeight: 600 }} />
             </div>
-            <button className="btn btn-secondary" style={{ width: '100%', padding: '0.8rem' }}>Join</button>
+            <button className="btn btn-primary" style={{ width: '100%', padding: '0.75rem' }}>Join →</button>
           </form>
         </div>
         <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
-          <h3 style={{ color: 'var(--secondary)' }}>Host Contest</h3>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>Create a custom workflow, define standard or timed limits, and invite participants.</p>
-          <button className="btn btn-primary" style={{ padding: '0.8rem 2rem' }} onClick={() => navigate('/host')}>Create Contest</button>
+          <h3 style={{ color: '#000', fontWeight: 700 }}>Host Contest</h3>
+          <p style={{ color: '#999', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Create a custom workflow, define standard or timed limits, and invite participants.</p>
+          <button className="btn btn-primary" style={{ padding: '0.75rem 2.5rem' }} onClick={() => navigate('/host')}>Create Contest →</button>
         </div>
       </div>
 
       <div className="glass-panel">
-        <h2 style={{ marginBottom: '1.5rem', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border-color)' }}>Contest History</h2>
+        <h2 style={{ marginBottom: '1.5rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--border-color)', color: '#111', fontSize: '1.3rem' }}>Contest History</h2>
         {loading ? (
-           <div className="loader" style={{ margin: '2rem auto', width: '30px', height: '30px', border: '3px solid rgba(255,123,0,0.3)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+           <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
+             <div className="loader" style={{ width: '30px', height: '30px', border: '3px solid #eee', borderTop: '3px solid #000', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem' }}>
             <div>
-              <h3 style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '1.1rem' }}>Hosted by Me</h3>
-              {hosted.length === 0 ? <p style={{ color: '#555', fontSize: '0.9rem' }}>No hosted contests yet.</p> : hosted.map(renderContestRow)}
+              <h3 style={{ color: '#555', marginBottom: '1rem', fontSize: '1rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Hosted by Me</h3>
+              {hosted.length === 0 ? <p style={{ color: '#ccc', fontSize: '0.9rem' }}>No hosted contests yet.</p> : hosted.map(renderContestRow)}
             </div>
             <div>
-              <h3 style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '1.1rem' }}>Participated In</h3>
-              {participated.length === 0 ? <p style={{ color: '#555', fontSize: '0.9rem' }}>No participation history yet.</p> : participated.map(renderContestRow)}
+              <h3 style={{ color: '#555', marginBottom: '1rem', fontSize: '1rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Participated In</h3>
+              {participated.length === 0 ? <p style={{ color: '#ccc', fontSize: '0.9rem' }}>No participation history yet.</p> : participated.map(renderContestRow)}
             </div>
           </div>
         )}
