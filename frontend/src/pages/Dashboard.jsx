@@ -5,9 +5,15 @@ import { API_URL } from '../config';
 
 export default function Dashboard() {
   const [linkCode, setLinkCode] = useState('');
-  const [hosted, setHosted] = useState([]);
-  const [participated, setParticipated] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [hosted, setHosted] = useState(() => {
+    const cached = localStorage.getItem('dashboard_cache_hosted');
+    return cached ? JSON.parse(cached) : [];
+  });
+  const [participated, setParticipated] = useState(() => {
+    const cached = localStorage.getItem('dashboard_cache_participated');
+    return cached ? JSON.parse(cached) : [];
+  });
+  const [loading, setLoading] = useState(() => !localStorage.getItem('dashboard_cache_hosted'));
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
 
@@ -18,8 +24,12 @@ export default function Dashboard() {
           axios.get(`${API_URL}/user/contests/hosted`),
           axios.get(`${API_URL}/user/contests/participated`)
         ]);
-        setHosted(hostRes.data.sort((a,b) => b.id - a.id));
-        setParticipated(partRes.data.sort((a,b) => b.id - a.id));
+        const sortedHost = hostRes.data.sort((a,b) => b.id - a.id);
+        const sortedPart = partRes.data.sort((a,b) => b.id - a.id);
+        setHosted(sortedHost);
+        setParticipated(sortedPart);
+        localStorage.setItem('dashboard_cache_hosted', JSON.stringify(sortedHost));
+        localStorage.setItem('dashboard_cache_participated', JSON.stringify(sortedPart));
       } catch (e) {
         console.error("Failed to load history", e);
       } finally {
@@ -41,7 +51,7 @@ export default function Dashboard() {
   };
 
   const renderContestRow = (c, idx) => (
-    <div key={c.id} className="fade-in-up" style={{ display: 'flex', flexDirection: 'column', padding: '1.25rem', background: 'var(--panel-bg)', borderRadius: '12px', marginBottom: '1rem', border: '1px solid var(--border-color)', transition: 'all 0.2s', animationDelay: `${idx * 0.05}s` }}>
+    <div key={c.id} style={{ display: 'flex', flexDirection: 'column', padding: '1.25rem', background: 'var(--panel-bg)', borderRadius: '12px', marginBottom: '1rem', border: '1px solid var(--border-color)', transition: 'all 0.2s' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
         <div>
           <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '1.1rem', marginBottom: '0.2rem' }}>{c.title}</div>
@@ -56,7 +66,7 @@ export default function Dashboard() {
       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
         <span className="badge badge-yellow" style={{ fontFamily: 'Consolas, monospace', letterSpacing: '1px' }}>{c.link_code}</span>
         <span className="badge" style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', textTransform: 'capitalize' }}>{c.mode.replace('_', ' ')}</span>
-        <span className="badge" style={{ background: c.status === 'ended' ? 'var(--bg-secondary)' : (c.status === 'active' ? 'var(--success-subtle)' : 'var(--bg-secondary)'), color: c.status === 'ended' ? 'var(--text-tertiary)' : (c.status === 'active' ? 'var(--success)' : 'var(--text-secondary)'), border: `1px solid ${c.status === 'active' ? 'var(--success)' : 'var(--border-color)'}` }}>
+        <span className="badge" style={{ background: c.status === 'ended' ? 'var(--danger)' : (c.status === 'active' ? 'var(--success)' : 'var(--bg-secondary)'), color: c.status === 'waiting' ? 'var(--text-secondary)' : '#fff', border: `1px solid ${c.status === 'ended' ? 'var(--danger)' : (c.status === 'active' ? 'var(--success)' : 'var(--border-color)')}` }}>
           {c.status.toUpperCase()}
         </span>
       </div>

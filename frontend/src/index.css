@@ -472,10 +472,10 @@ a:hover { opacity: 0.7; }
 }
 .theme-toggle .moon-icon {
   right: 6px;
-  opacity: 0;
+  opacity: 1;
 }
 [data-theme="dark"] .theme-toggle .sun-icon {
-  opacity: 0;
+  opacity: 1;
 }
 [data-theme="dark"] .theme-toggle .moon-icon {
   opacity: 1;
