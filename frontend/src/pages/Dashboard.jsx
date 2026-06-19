@@ -39,17 +39,17 @@ export default function Dashboard() {
     return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
   };
 
-  const renderContestRow = (c) => (
-    <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: '#fafafa', borderRadius: '8px', marginBottom: '0.75rem', border: '1px solid #f0f0f0', transition: 'all 0.15s' }}>
+  const renderContestRow = (c, idx) => (
+    <div key={c.id} className="fade-in" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: 'var(--bg-secondary)', borderRadius: '10px', marginBottom: '0.75rem', border: '1px solid var(--border-color)', transition: 'all 0.25s', cursor: 'pointer', animationDelay: `${idx * 0.05}s` }} onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.transform = 'translateX(4px)'; }} onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.transform = 'translateX(0)'; }}>
       <div>
-        <div style={{ fontWeight: 600, color: '#111', fontSize: '1.05rem', marginBottom: '0.3rem' }}>{c.title}</div>
-        <div style={{ fontSize: '0.8rem', color: '#999', marginBottom: '0.2rem' }}>
-          Code: <span style={{ color: '#333', fontWeight: 500 }}>{c.link_code}</span> &nbsp;|&nbsp; 
-          Mode: <span style={{ color: '#333', textTransform: 'capitalize', fontWeight: 500 }}>{c.mode.replace('_', ' ')}</span> &nbsp;|&nbsp; 
-          Status: <span style={{ fontWeight: 600, color: c.status === 'ended' ? '#999' : c.status === 'active' ? '#000' : '#aaa' }}>{c.status.toUpperCase()}</span>
+        <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '1.05rem', marginBottom: '0.3rem' }}>{c.title}</div>
+        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.2rem' }}>
+          Code: <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{c.link_code}</span> &nbsp;|&nbsp; 
+          Mode: <span style={{ color: 'var(--text-primary)', textTransform: 'capitalize', fontWeight: 500 }}>{c.mode.replace('_', ' ')}</span> &nbsp;|&nbsp; 
+          Status: <span style={{ fontWeight: 600, color: c.status === 'ended' ? 'var(--text-tertiary)' : c.status === 'active' ? 'var(--success)' : 'var(--text-secondary)' }}>{c.status.toUpperCase()}</span>
         </div>
-        <div style={{ fontSize: '0.75rem', color: '#bbb' }}>
-          Hosted by: <span style={{ color: '#666' }}>{c.host_name}</span> &nbsp;|&nbsp; 
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+          Hosted by: <span style={{ color: 'var(--text-secondary)' }}>{c.host_name}</span> &nbsp;|&nbsp; 
           Date: {formatDate(c.start_time)}
         </div>
       </div>
@@ -59,17 +59,17 @@ export default function Dashboard() {
 
   return (
     <div className="container">
-      <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-        <h1 style={{ fontSize: '2.5rem', margin: 0, fontWeight: 800, letterSpacing: '-0.02em' }}>Arena Dashboard</h1>
-        <p style={{ color: '#999', maxWidth: '600px', margin: '0.75rem auto', lineHeight: 1.7, fontSize: '1rem' }}>
-          Welcome to your competitive programming workspace. Join an active contest by entering an invite code below, or host your own custom challenge.
+      <div style={{ textAlign: 'center', marginBottom: '2.5rem' }} className="fade-in">
+        <h1 style={{ fontSize: '2.8rem', margin: 0, fontWeight: 800, letterSpacing: '-0.03em' }}>Arena Dashboard</h1>
+        <p style={{ color: 'var(--text-secondary)', maxWidth: '600px', margin: '0.75rem auto', lineHeight: 1.8, fontSize: '1rem' }}>
+          Welcome to your competitive programming workspace. Join an active contest or host your own custom challenge.
         </p>
       </div>
       
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem', marginBottom: '2.5rem' }}>
-        <div className="glass-panel">
-          <h3 style={{ color: '#000', fontWeight: 700 }}>Join Contest</h3>
-          <p style={{ color: '#999', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Enter the unique access code assigned to you by the host.</p>
+        <div className="glass-panel hover-lift fade-in-up stagger-1">
+          <h3 style={{ fontWeight: 700 }}>Join Contest</h3>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Enter the unique access code assigned to you by the host.</p>
           <form onSubmit={joinContest}>
             <div className="form-group">
               <input className="form-input" placeholder="8-CHAR CODE" required value={linkCode} onChange={e => setLinkCode(e.target.value)} style={{ fontSize: '1.2rem', letterSpacing: '3px', textAlign: 'center', padding: '0.8rem', fontWeight: 600 }} />
@@ -77,28 +77,28 @@ export default function Dashboard() {
             <button className="btn btn-primary" style={{ width: '100%', padding: '0.75rem' }}>Join →</button>
           </form>
         </div>
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
-          <h3 style={{ color: '#000', fontWeight: 700 }}>Host Contest</h3>
-          <p style={{ color: '#999', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Create a custom workflow, define standard or timed limits, and invite participants.</p>
+        <div className="glass-panel hover-lift fade-in-up stagger-2" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
+          <h3 style={{ fontWeight: 700 }}>Host Contest</h3>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Create a custom workflow, define standard or timed limits, and invite participants.</p>
           <button className="btn btn-primary" style={{ padding: '0.75rem 2.5rem' }} onClick={() => navigate('/host')}>Create Contest →</button>
         </div>
       </div>
 
-      <div className="glass-panel">
-        <h2 style={{ marginBottom: '1.5rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--border-color)', color: '#111', fontSize: '1.3rem' }}>Contest History</h2>
+      <div className="glass-panel fade-in-up stagger-3">
+        <h2 style={{ marginBottom: '1.5rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--border-color)', fontSize: '1.3rem' }}>Contest History</h2>
         {loading ? (
            <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
-             <div className="loader" style={{ width: '30px', height: '30px', border: '3px solid #eee', borderTop: '3px solid #000', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+             <div style={{ width: '30px', height: '30px', border: '3px solid var(--border-color)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }}></div>
            </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem' }}>
             <div>
-              <h3 style={{ color: '#555', marginBottom: '1rem', fontSize: '1rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Hosted by Me</h3>
-              {hosted.length === 0 ? <p style={{ color: '#ccc', fontSize: '0.9rem' }}>No hosted contests yet.</p> : hosted.map(renderContestRow)}
+              <h3 style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '0.9rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Hosted by Me</h3>
+              {hosted.length === 0 ? <p style={{ color: 'var(--text-tertiary)', fontSize: '0.9rem' }}>No hosted contests yet.</p> : hosted.map((c, i) => renderContestRow(c, i))}
             </div>
             <div>
-              <h3 style={{ color: '#555', marginBottom: '1rem', fontSize: '1rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Participated In</h3>
-              {participated.length === 0 ? <p style={{ color: '#ccc', fontSize: '0.9rem' }}>No participation history yet.</p> : participated.map(renderContestRow)}
+              <h3 style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '0.9rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Participated In</h3>
+              {participated.length === 0 ? <p style={{ color: 'var(--text-tertiary)', fontSize: '0.9rem' }}>No participation history yet.</p> : participated.map((c, i) => renderContestRow(c, i))}
             </div>
           </div>
         )}

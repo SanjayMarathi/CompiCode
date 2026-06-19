@@ -20,6 +20,18 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [alertConfig, setAlertConfig] = useState(null);
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    document.body.classList.add('theme-transitioning');
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+    setTimeout(() => document.body.classList.remove('theme-transitioning'), 500);
+  };
 
   useEffect(() => {
     window.alert = (message) => {
@@ -51,7 +63,8 @@ export default function App() {
   if (isInitializing) {
     return (
       <div className="container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-        <div className="loader" style={{ marginBottom: '1rem', width: '50px', height: '50px', border: '5px solid #eee', borderTop: '5px solid #000', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+        <div style={{ marginBottom: '1.5rem', width: '50px', height: '50px', border: '3px solid var(--border-color)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }}></div>
+        <p className="pulse-text" style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Loading...</p>
       </div>
     );
   }
@@ -61,10 +74,14 @@ export default function App() {
       <nav className="navbar">
         <Link to="/" className="brand">Compi<span>Code</span></Link>
         <div className="nav-links">
+          <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+            <span className="toggle-icon sun-icon">☀️</span>
+            <span className="toggle-icon moon-icon">🌙</span>
+          </button>
           {user ? (
             <>
-              {user.is_admin && <span className="badge badge-yellow" style={{ marginRight: '1rem' }}>Admin</span>}
-              <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Welcome, <strong style={{ color: '#000' }}>{user.username}</strong></span>
+              {user.is_admin && <span className="badge" style={{ marginRight: '0.5rem' }}>Admin</span>}
+              <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Welcome, <strong style={{ color: 'var(--text-primary)' }}>{user.username}</strong></span>
               <button className="btn btn-secondary" onClick={logout} style={{ padding: '0.4rem 1rem', fontSize: '0.8rem' }}>Log Out</button>
             </>
           ) : (
@@ -87,15 +104,15 @@ export default function App() {
       <Footer />
 
       {alertConfig && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)' }}>
-          <div style={{ background: '#fff', border: '1px solid var(--border-color)', borderRadius: '10px', width: '90%', maxWidth: '400px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', overflow: 'hidden', animation: 'fadeInUp 0.2s ease-out' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--overlay-bg)', backdropFilter: 'blur(8px)' }}>
+          <div className="fade-in-scale" style={{ background: 'var(--modal-bg)', border: '1px solid var(--border-color)', borderRadius: '14px', width: '90%', maxWidth: '400px', boxShadow: 'var(--shadow-lg)', overflow: 'hidden' }}>
             <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-color)' }}>
-              <h3 style={{ margin: 0, color: '#000', fontSize: '1.1rem' }}>{alertConfig.title}</h3>
+              <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{alertConfig.title}</h3>
             </div>
-            <div style={{ padding: '1.5rem', color: '#333', fontSize: '0.95rem', lineHeight: '1.6' }}>
+            <div style={{ padding: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.6' }}>
               {alertConfig.message}
             </div>
-            <div style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'flex-end', background: '#fafafa', borderTop: '1px solid var(--border-color)' }}>
+            <div style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'flex-end', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border-color)' }}>
               <button className="btn btn-primary" onClick={() => setAlertConfig(null)} style={{ padding: '0.4rem 1.5rem' }}>OK</button>
             </div>
           </div>
@@ -104,5 +121,3 @@ export default function App() {
     </Router>
   );
 }
-
-

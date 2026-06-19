@@ -17,7 +17,7 @@ export default function SolvePlatform() {
     return saved !== null ? saved : boilerplates['cpp'];
   });
   const [status, setStatus] = useState('');
-  const [statusColor, setStatusColor] = useState('#999');
+  const [statusColor, setStatusColor] = useState('var(--text-tertiary)');
   const [sandboxError, setSandboxError] = useState('');
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [userObj, setUserObj] = useState(null);
@@ -40,23 +40,20 @@ export default function SolvePlatform() {
     axios.get(`${API_URL}/me`).then(res => setCurrentUser(res.data)).catch(() => {});
   }, []);
 
-  // Reset state when questionId changes (critical for timed mode navigation)
   useEffect(() => {
     if (!isSuddenDeath) {
       setQData(null);
       setAlreadySolved(false);
       setStatus('');
-      setStatusColor('#999');
+      setStatusColor('var(--text-tertiary)');
       setEvalResults(null);
       setIsSubmitting(false);
       setElapsedSeconds(0);
       
-      // Load saved code for this specific question or use boilerplate
       const saved = localStorage.getItem(`code_${contestId}_${questionId}`);
       setCode(saved !== null ? saved : boilerplates[language]);
       
       fetchQuestionDetailed(questionId);
-      // Check if already solved
       axios.get(`${API_URL}/contests/${contestId}/my-solved`).then(res => {
         if ((res.data.solved_question_ids || []).map(String).includes(String(questionId))) {
           setAlreadySolved(true);
@@ -68,7 +65,6 @@ export default function SolvePlatform() {
   }, [contestId, questionId]);
 
   useEffect(() => {
-    // Both sudden death and regular need contest info
     const fetchInfo = () => {
       axios.get(`${API_URL}/contests/${contestId}/info`).then(res => {
         setContestInfo(res.data);
@@ -80,7 +76,6 @@ export default function SolvePlatform() {
     fetchInfo();
     const infoInterval = setInterval(fetchInfo, 5000);
 
-    // Connect WebSocket for ALL modes to listen for CONTEST_ENDED
     ws.current = new WebSocket(`${WS_URL}/ws/contest/${contestId}`);
     ws.current.onmessage = (event) => {
       const msg = JSON.parse(event.data);
@@ -121,7 +116,6 @@ export default function SolvePlatform() {
     }
   };
 
-  // Elapsed time counter for standard/timed modes
   useEffect(() => {
     if (!isSuddenDeath && contestInfo) {
       if (contestInfo.mode === 'standard') {
@@ -131,7 +125,6 @@ export default function SolvePlatform() {
         } else if (contestInfo.start_time) {
           start = new Date(contestInfo.start_time + 'Z').getTime();
         } else {
-          // If start_time is null, try to read from localStorage to avoid resetting
           const lsKey = `contest_${contestId}_start`;
           if (!localStorage.getItem(lsKey)) localStorage.setItem(lsKey, Date.now().toString());
           start = parseInt(localStorage.getItem(lsKey));
@@ -156,7 +149,6 @@ export default function SolvePlatform() {
            const lsKey = `contest_${contestId}_q_${questionId}_start`;
            if (!localStorage.getItem(lsKey)) localStorage.setItem(lsKey, Date.now().toString());
            const start = parseInt(localStorage.getItem(lsKey));
-           // Calculate initial elapsed
            const initialElapsed = Math.floor((Date.now() - start) / 1000);
            if (initialElapsed >= timeLimit) {
              setElapsedSeconds(timeLimit);
@@ -202,7 +194,6 @@ export default function SolvePlatform() {
       if (sdState.state === 'CONTEST_OVER' || sdState.state === 'ROUND_OVER') {
         axios.get(`${API_URL}/contests/${contestId}/leaderboard`).then(res => setFinalLeaderboard(res.data));
       }
-      // Start round countdown when ROUND_OVER
       if (sdState.state === 'ROUND_OVER') {
         setRoundCountdown(10);
         if (roundCountdownRef.current) clearInterval(roundCountdownRef.current);
@@ -246,7 +237,7 @@ export default function SolvePlatform() {
     if ((alreadySolved && !isAutoSubmit) || isSubmitting) return;
     setIsSubmitting(true);
     setStatus('');
-    setStatusColor('#999');
+    setStatusColor('var(--text-tertiary)');
     setEvalResults(null);
     try {
       const activeQ = qData ? qData.id : questionId;
@@ -281,11 +272,11 @@ export default function SolvePlatform() {
   };
   
   if (isSuddenDeath && sdState && sdState.state === 'WAITING_TO_START') {
-    return <div className="sudden-death-overlay">
-      <h1 className="pulse-text" style={{ fontSize: '2.5rem', color: '#000', textTransform: 'uppercase', marginBottom: '0.5rem', fontWeight: 800, letterSpacing: '-0.02em' }}>Waiting for Match Start</h1>
-      <p style={{ color: '#999', marginBottom: '2rem', fontSize: '1rem' }}>The host will initiate the match shortly.</p>
+    return <div className="sudden-death-overlay fade-in">
+      <h1 className="pulse-text" style={{ fontSize: '2.5rem', color: 'var(--text-primary)', textTransform: 'uppercase', marginBottom: '0.5rem', fontWeight: 800, letterSpacing: '-0.02em' }}>Waiting for Match Start</h1>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', fontSize: '1rem' }}>The host will initiate the match shortly.</p>
       {finalLeaderboard.length > 0 && (
-        <div className="glass-panel" style={{ width: '100%', maxWidth: '900px', textAlign: 'left' }}>
+        <div className="glass-panel fade-in-up" style={{ width: '100%', maxWidth: '900px', textAlign: 'left' }}>
           <CodeforcesStandings leaderboard={finalLeaderboard} questions={contestInfo?.questions} title="Current Standings" mode="sudden_death" isHost={currentUser && contestInfo && currentUser.id === contestInfo.host_id} onKick={handleKick} />
         </div>
       )}
@@ -293,40 +284,39 @@ export default function SolvePlatform() {
   }
 
   if (isSuddenDeath && sdState && sdState.state === 'ROUND_OVER') {
-    return <div className="sudden-death-overlay" style={{ background: '#fff', padding: '2rem' }}>
+    return <div className="sudden-death-overlay fade-in" style={{ background: 'var(--panel-bg)', padding: '2rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', width: '100%', maxWidth: '900px' }}>
-        <div>
-          <h1 style={{ color: '#000', fontSize: '2.5rem', margin: 0, fontWeight: 800 }}>Round {sdState.current_q_idx + 1} Complete</h1>
+        <div className="slide-in-left">
+          <h1 style={{ color: 'var(--text-primary)', fontSize: '2.5rem', margin: 0, fontWeight: 800 }}>Round {sdState.current_q_idx + 1} Complete</h1>
           <p style={{ color: 'var(--success)', fontWeight: 600, margin: '0.25rem 0 0', fontSize: '1.1rem' }}>Winner: {sdState.winner || 'No winner'}</p>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '0.9rem', color: '#999', marginTop: '0.5rem' }}>Next round in <strong style={{ color: '#000' }}>{roundCountdown}s</strong></div>
+        <div style={{ textAlign: 'right' }} className="fade-in">
+          <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>Next round in <strong style={{ color: 'var(--text-primary)' }}>{roundCountdown}s</strong></div>
         </div>
       </div>
-      <div className="glass-panel" style={{ width: '100%', maxWidth: '900px', textAlign: 'left' }}>
+      <div className="glass-panel fade-in-up" style={{ width: '100%', maxWidth: '900px', textAlign: 'left' }}>
         <CodeforcesStandings leaderboard={finalLeaderboard} questions={contestInfo?.questions} title="Standings" mode="sudden_death" isHost={currentUser && contestInfo && currentUser.id === contestInfo.host_id} onKick={handleKick} />
       </div>
     </div>;
   }
 
   if (isSuddenDeath && sdState && sdState.state === 'CONTEST_OVER') {
-    return <div className="sudden-death-overlay" style={{ background: '#fff', padding: '2rem' }}>
-      <h1 style={{ color: '#000', fontSize: '3.5rem', marginBottom: '0.5rem', fontWeight: 800, letterSpacing: '-0.03em' }}>Match Over</h1>
-      <p style={{ color: '#999', marginBottom: '2rem' }}>Final results below</p>
-      <div className="glass-panel" style={{ width: '100%', maxWidth: '900px', textAlign: 'left', marginBottom: '1.5rem' }}>
+    return <div className="sudden-death-overlay fade-in" style={{ background: 'var(--panel-bg)', padding: '2rem' }}>
+      <h1 style={{ color: 'var(--text-primary)', fontSize: '3.5rem', marginBottom: '0.5rem', fontWeight: 800, letterSpacing: '-0.03em' }}>Match Over</h1>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Final results below</p>
+      <div className="glass-panel fade-in-up stagger-1" style={{ width: '100%', maxWidth: '900px', textAlign: 'left', marginBottom: '1.5rem' }}>
         <CodeforcesStandings leaderboard={finalLeaderboard} questions={contestInfo?.questions} title="Final Standings" mode="sudden_death" isHost={currentUser && contestInfo && currentUser.id === contestInfo.host_id} onKick={handleKick} />
       </div>
-      <button className="btn btn-primary" onClick={() => navigate('/')} style={{ padding: '0.75rem 2rem' }}>Return to Dashboard →</button>
+      <button className="btn btn-primary fade-in-up stagger-2" onClick={() => navigate('/')} style={{ padding: '0.75rem 2rem' }}>Return to Dashboard →</button>
     </div>;
   }
 
-  // Build the navigation list for timed mode (to show all problems with navigation)
   const timedQuestions = (!isSuddenDeath && contestInfo && contestInfo.mode === 'timed' && contestInfo.questions) ? contestInfo.questions : [];
   const isHost = currentUser && contestInfo && currentUser.id === contestInfo.host_id;
 
   return (
     <div className="solve-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="fade-in" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button className="btn btn-secondary" onClick={() => navigate(-1)} style={{ padding: '0.4rem 0.8rem' }}>&larr; Back</button>
           {isHost && (
@@ -336,24 +326,24 @@ export default function SolvePlatform() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           {isSuddenDeath && sdGlobalTimer !== null && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.9rem', color: '#999' }}>Round Time:</span>
-              <span style={{ fontSize: '1.2rem', fontWeight: 600, color: '#000', background: '#f5f5f5', padding: '0.2rem 1rem', borderRadius: '4px', border: '1px solid #eee', fontFamily: 'Consolas, monospace' }}>
+              <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Round Time:</span>
+              <span style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-primary)', background: 'var(--badge-bg)', padding: '0.2rem 1rem', borderRadius: '4px', border: '1px solid var(--border-color)', fontFamily: 'Consolas, monospace' }}>
                 {formatTime(sdGlobalTimer)}
               </span>
             </div>
           )}
           {!isSuddenDeath && contestInfo && contestInfo.mode === 'standard' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.9rem', color: '#999' }}>Time Left:</span>
-              <span style={{ fontSize: '1.2rem', fontWeight: 600, color: '#000', background: '#f5f5f5', padding: '0.2rem 1rem', borderRadius: '4px', border: '1px solid #eee', fontFamily: 'Consolas, monospace' }}>
+              <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Time Left:</span>
+              <span style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-primary)', background: 'var(--badge-bg)', padding: '0.2rem 1rem', borderRadius: '4px', border: '1px solid var(--border-color)', fontFamily: 'Consolas, monospace' }}>
                 {formatTime(Math.max(0, contestInfo.overall_time_limit * 60 - elapsedSeconds))}
               </span>
             </div>
           )}
           {!isSuddenDeath && contestInfo && contestInfo.mode === 'timed' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.9rem', color: '#999' }}>Time Left:</span>
-              <span style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--danger)', background: '#f5f5f5', padding: '0.2rem 1rem', borderRadius: '4px', border: '1px solid #eee', fontFamily: 'Consolas, monospace' }}>
+              <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Time Left:</span>
+              <span style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--danger)', background: 'var(--badge-bg)', padding: '0.2rem 1rem', borderRadius: '4px', border: '1px solid var(--border-color)', fontFamily: 'Consolas, monospace' }}>
                 {(() => {
                   const questions = contestInfo.questions || [];
                   const q = questions.find(x => String(x.id) === String(questionId));
@@ -367,9 +357,8 @@ export default function SolvePlatform() {
         </div>
       </div>
 
-      {/* Timed mode: show problem navigation tabs */}
       {timedQuestions.length > 0 && (
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', padding: '0.5rem 0' }}>
+        <div className="fade-in-up stagger-1" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', padding: '0.5rem 0' }}>
           {timedQuestions.map((tq, idx) => {
             const isActive = String(tq.id) === String(questionId);
             return (
@@ -380,11 +369,11 @@ export default function SolvePlatform() {
                 style={{
                   padding: '0.4rem 1rem',
                   fontSize: '0.85rem',
-                  background: isActive ? '#000' : '#f5f5f5',
-                  color: isActive ? '#fff' : '#555',
+                  background: isActive ? 'var(--primary)' : 'var(--badge-bg)',
+                  color: isActive ? 'var(--bg-color)' : 'var(--text-secondary)',
                   borderRadius: '4px',
                   textDecoration: 'none',
-                  border: isActive ? '2px solid #000' : '1px solid var(--border-color)',
+                  border: isActive ? '2px solid var(--primary)' : '1px solid var(--border-color)',
                   transition: 'all 0.15s'
                 }}
               >
@@ -395,17 +384,17 @@ export default function SolvePlatform() {
         </div>
       )}
       
-      <div className="problem-title">
-        <h1 style={{ margin: 0, color: '#000' }}>{qData ? qData.title : 'Loading Problem...'}</h1>
+      <div className="problem-title fade-in-up stagger-1">
+        <h1 style={{ margin: 0, color: 'var(--text-primary)' }}>{qData ? qData.title : 'Loading Problem...'}</h1>
         <span className="badge badge-yellow" style={{ marginLeft: '1rem' }}>Problem</span>
       </div>
       
-      <div className="problem-desc">
-        <div style={{ whiteSpace: 'pre-wrap', fontWeight: 500, color: '#333', fontSize: '0.95rem', lineHeight: '1.7' }}>
+      <div className="problem-desc fade-in-up stagger-2">
+        <div style={{ whiteSpace: 'pre-wrap', fontWeight: 500, color: 'var(--text-primary)', fontSize: '0.95rem', lineHeight: '1.7' }}>
           {qData ? (
             qData.description.split('\n').map((line, i) => {
               if (line.trim().startsWith('###')) {
-                return <strong key={i} style={{ display: 'block', marginTop: '1.2rem', marginBottom: '0.4rem', color: '#000', fontSize: '1.1rem' }}>{line.replace('###', '').trim()}</strong>;
+                return <strong key={i} style={{ display: 'block', marginTop: '1.2rem', marginBottom: '0.4rem', color: 'var(--text-primary)', fontSize: '1.1rem' }}>{line.replace('###', '').trim()}</strong>;
               }
               return <React.Fragment key={i}>{line}{'\n'}</React.Fragment>;
             })
@@ -413,24 +402,24 @@ export default function SolvePlatform() {
         </div>
 
         {qData && qData.test_cases.slice(0, 2).map((tc, idx) => (
-          <div key={idx} className="example-block" style={{ marginTop: '1.5rem' }}>
-            <strong style={{ display: 'block', marginBottom: '0.5rem', color: '#000' }}>Example {idx + 1}:</strong>
+          <div key={idx} className="example-block hover-lift" style={{ marginTop: '1.5rem' }}>
+            <strong style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Example {idx + 1}:</strong>
             <div style={{ marginBottom: '0.5rem' }}>
-              <span style={{ color: '#888' }}>Input:</span>
-              <pre style={{ marginTop: '0.25rem', background: '#f5f5f5', padding: '0.75rem', borderRadius: '4px', border: '1px solid #eee', color: '#333' }}>{tc.input}</pre>
+              <span style={{ color: 'var(--text-secondary)' }}>Input:</span>
+              <pre style={{ marginTop: '0.25rem', background: 'var(--code-bg)', padding: '0.75rem', borderRadius: '4px', border: '1px solid var(--code-border)', color: 'var(--text-primary)' }}>{tc.input}</pre>
             </div>
             <div>
-              <span style={{ color: '#888' }}>Output:</span>
-              <pre style={{ marginTop: '0.25rem', background: '#f5f5f5', padding: '0.75rem', borderRadius: '4px', border: '1px solid #eee', color: '#333' }}>{tc.expected}</pre>
+              <span style={{ color: 'var(--text-secondary)' }}>Output:</span>
+              <pre style={{ marginTop: '0.25rem', background: 'var(--code-bg)', padding: '0.75rem', borderRadius: '4px', border: '1px solid var(--code-border)', color: 'var(--text-primary)' }}>{tc.expected}</pre>
             </div>
           </div>
         ))}
       </div>
       
-      <div className={isFullscreen ? 'editor-fullscreen' : 'editor-wrapper'} style={isFullscreen ? {position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 9999, background: 'var(--editor-bg)', display: 'flex', flexDirection: 'column'} : {}}>
+      <div className={isFullscreen ? 'editor-fullscreen' : 'editor-wrapper'} style={isFullscreen ? {position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 9999, background: 'var(--editor-bg)', display: 'flex', flexDirection: 'column'} : {animation: 'fadeInUp 0.6s ease-out 0.2s both'}}>
         <div className="editor-toolbar">
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <select className="form-input" value={language} onChange={handleLanguageChange} style={{ width: 'auto', background: '#fff', border: '1px solid #ddd', color: '#333', padding: '0.4rem 1rem', borderRadius: '4px' }}>
+            <select className="form-input" value={language} onChange={handleLanguageChange} style={{ width: 'auto', background: 'var(--panel-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0.4rem 1rem', borderRadius: '4px' }}>
               <option value="cpp">C++</option>
               <option value="python">Python</option>
               <option value="java">Java</option>
@@ -440,7 +429,7 @@ export default function SolvePlatform() {
             </button>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <span style={{ fontSize: '1rem', color: statusColor || '#999', marginRight: '1.5rem', fontWeight: 700 }}>
+            <span style={{ fontSize: '1rem', color: statusColor || 'var(--text-tertiary)', marginRight: '1.5rem', fontWeight: 700 }}>
               {status}
             </span>
             <button
@@ -456,7 +445,7 @@ export default function SolvePlatform() {
         <div style={{ height: '400px', background: 'var(--editor-bg)' }}>
           <Editor
             height="100%"
-            theme="vs-dark"
+            theme={document.documentElement.getAttribute('data-theme') === 'dark' ? 'vs-dark' : 'vs-dark'}
             language={language === 'cpp' ? 'cpp' : language}
             value={code}
             onChange={(val) => { setCode(val); localStorage.setItem(`code_${contestId}_${questionId}`, val); }}
@@ -471,47 +460,47 @@ export default function SolvePlatform() {
       </div>
       
       {!isFullscreen && (
-        <div className="testcase-panel">
+        <div className="testcase-panel fade-in-up stagger-4">
           <div className="testcase-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
              <span>Console Output</span>
              {(evalResults || qData) && (
-               <span style={{ fontSize: '0.85rem', color: evalResults ? (evalResults.every(r => r.passed) ? 'var(--success)' : (evalResults.some(r => r.passed) ? '#888' : 'var(--danger)')) : '#bbb', fontWeight: 600, background: '#f0f0f0', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>
+               <span style={{ fontSize: '0.85rem', color: evalResults ? (evalResults.every(r => r.passed) ? 'var(--success)' : (evalResults.some(r => r.passed) ? 'var(--text-secondary)' : 'var(--danger)')) : 'var(--text-tertiary)', fontWeight: 600, background: 'var(--badge-bg)', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>
                  {evalResults ? evalResults.filter(r => r.passed).length : 0} / {evalResults ? evalResults.length : (qData?.test_cases?.length || 0)} Testcases Passed
                </span>
              )}
           </div>
           <div className="testcase-body">
-            {!evalResults && !isSubmitting && <div style={{ color: '#ccc' }}>You must hit submit to check your code against all hidden testcases...</div>}
+            {!evalResults && !isSubmitting && <div style={{ color: 'var(--text-tertiary)' }}>You must hit submit to check your code against all hidden testcases...</div>}
             {isSubmitting && !evalResults && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem' }}>
-                <div style={{ width: '24px', height: '24px', border: '3px solid #eee', borderTop: '3px solid #000', borderRadius: '50%', animation: 'spin 1s linear infinite', flexShrink: 0 }}></div>
-                <span style={{ color: '#333', fontWeight: 600 }}>Evaluating your submission...</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem' }} className="fade-in">
+                <div style={{ width: '24px', height: '24px', border: '3px solid var(--border-color)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite', flexShrink: 0 }}></div>
+                <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Evaluating your submission...</span>
               </div>
             )}
             {evalResults && (
-              <>
+              <div className="fade-in-scale">
                 {evalResults.map((res, i) => {
                   const isHidden = i >= 2;
                   
                   return (
-                    <div key={i} className="test-block" style={{ borderLeft: `4px solid ${res.passed ? 'var(--success)' : 'var(--danger)'}` }}>
+                    <div key={i} className="test-block hover-lift" style={{ borderLeft: `4px solid ${res.passed ? 'var(--success)' : 'var(--danger)'}`, animationDelay: `${i * 0.1}s` }}>
                       <div style={{ fontWeight: 700, color: res.passed ? 'var(--success)' : 'var(--danger)', marginBottom: isHidden ? 0 : '0.8rem', fontSize: '0.9rem' }}>
                         Testcase {i + 1} {isHidden ? '(Hidden) ' : ''}{res.passed ? 'Accepted' : (res.error ? 'Error' : 'Wrong Answer')}
                       </div>
                       {!isHidden && (
-                        <div style={{ color: '#555', fontFamily: 'Consolas, monospace', fontSize: '0.85rem', lineHeight: '1.6' }}>
+                        <div style={{ color: 'var(--text-secondary)', fontFamily: 'Consolas, monospace', fontSize: '0.85rem', lineHeight: '1.6' }}>
                           <div style={{ marginBottom: '0.75rem' }}>
-                            <span style={{ color: '#999', display: 'block', marginBottom: '0.25rem' }}>Input:</span>
-                            <pre style={{ margin: 0, background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace', border: '1px solid #eee', color: '#333' }}>{res.input}</pre>
+                            <span style={{ color: 'var(--text-tertiary)', display: 'block', marginBottom: '0.25rem' }}>Input:</span>
+                            <pre style={{ margin: 0, background: 'var(--code-bg)', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace', border: '1px solid var(--code-border)', color: 'var(--text-primary)' }}>{res.input}</pre>
                           </div>
                           <div style={{ marginBottom: '0.75rem' }}>
-                            <span style={{ color: '#999', display: 'block', marginBottom: '0.25rem' }}>Expected:</span>
-                            <pre style={{ margin: 0, background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace', border: '1px solid #eee', color: '#333' }}>{res.expected}</pre>
+                            <span style={{ color: 'var(--text-tertiary)', display: 'block', marginBottom: '0.25rem' }}>Expected:</span>
+                            <pre style={{ margin: 0, background: 'var(--code-bg)', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace', border: '1px solid var(--code-border)', color: 'var(--text-primary)' }}>{res.expected}</pre>
                           </div>
                           {!res.error && (
                             <div>
-                              <span style={{ color: '#999', display: 'block', marginBottom: '0.25rem' }}>Actual:</span>
-                              <pre style={{ margin: 0, background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace', border: '1px solid #eee', color: '#333' }}>{res.actual || 'No output'}</pre>
+                              <span style={{ color: 'var(--text-tertiary)', display: 'block', marginBottom: '0.25rem' }}>Actual:</span>
+                              <pre style={{ margin: 0, background: 'var(--code-bg)', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace', border: '1px solid var(--code-border)', color: 'var(--text-primary)' }}>{res.actual || 'No output'}</pre>
                             </div>
                           )}
                         </div>
@@ -521,33 +510,33 @@ export default function SolvePlatform() {
                 })}
 
                 {evalResults.some(r => r.error) && (
-                  <div className="test-block" style={{ borderLeft: '4px solid var(--danger)', marginTop: '1rem' }}>
+                  <div className="test-block hover-lift" style={{ borderLeft: '4px solid var(--danger)', marginTop: '1rem' }}>
                     <div style={{ fontWeight: 700, color: 'var(--danger)', marginBottom: '0.8rem', fontSize: '0.9rem' }}>
                       Compilation / Runtime Error Details
                     </div>
-                    <div style={{ color: '#555', fontFamily: 'Consolas, monospace', fontSize: '0.85rem', lineHeight: '1.6' }}>
-                      <pre style={{ margin: 0, background: '#fff5f5', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace', border: '1px solid #fecaca', color: '#991b1b' }}>
+                    <div style={{ color: 'var(--text-secondary)', fontFamily: 'Consolas, monospace', fontSize: '0.85rem', lineHeight: '1.6' }}>
+                      <pre style={{ margin: 0, background: 'var(--danger-subtle)', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace', border: '1px solid var(--danger)', color: 'var(--danger)' }}>
                         {evalResults.find(r => r.error).error}
                       </pre>
                     </div>
                   </div>
                 )}
-              </>
+              </div>
             )}
           </div>
         </div>
       )}
 
       {showEndConfirm && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)' }}>
-          <div style={{ background: '#fff', border: '1px solid var(--border-color)', borderRadius: '10px', width: '90%', maxWidth: '400px', boxShadow: '0 20px 60px rgba(0,0,0,0.15)', overflow: 'hidden', animation: 'fadeInUp 0.2s ease-out' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--overlay-bg)', backdropFilter: 'blur(8px)' }}>
+          <div className="fade-in-scale" style={{ background: 'var(--modal-bg)', border: '1px solid var(--border-color)', borderRadius: '12px', width: '90%', maxWidth: '400px', boxShadow: 'var(--shadow-lg)', overflow: 'hidden' }}>
             <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-color)' }}>
               <h3 style={{ margin: 0, color: 'var(--danger)', fontSize: '1.1rem' }}>End Contest</h3>
             </div>
-            <div style={{ padding: '1.5rem', color: '#333', fontSize: '0.95rem', lineHeight: '1.6' }}>
+            <div style={{ padding: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.6' }}>
               Are you sure you want to end this contest for everyone?
             </div>
-            <div style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem', background: '#fafafa', borderTop: '1px solid var(--border-color)' }}>
+            <div style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border-color)' }}>
               <button className="btn btn-secondary" onClick={() => setShowEndConfirm(false)} style={{ padding: '0.4rem 1.5rem' }}>Cancel</button>
               <button className="btn btn-danger" onClick={endContest} style={{ padding: '0.4rem 1.5rem' }}>End Contest</button>
             </div>
