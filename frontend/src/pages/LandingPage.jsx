@@ -1,88 +1,103 @@
 import React from 'react';
 import { Link, Navigate } from 'react-router-dom';
+import Icon from '../components/Icon';
+import { MODE_META } from '../config';
+
+const MODES = [
+  { key: 'sudden_death', side: 'left', filled: false, points: ['Everyone is on the same problem', 'First to pass every test claims the round', 'The whole lobby advances together'] },
+  { key: 'timed', side: 'right', filled: true, points: ['Every problem has its own countdown', 'When it hits zero, that problem locks', 'Rewards speed and decisiveness'] },
+  { key: 'standard', side: 'left', filled: false, points: ['Solve all problems at your own pace', 'One global time limit for the contest', 'Ranked by score, then lowest penalty'] },
+];
+
+const STEPS = [
+  { title: 'Join a lobby', desc: 'Host a private contest or jump into one with an access code.' },
+  { title: 'Write code', desc: 'A full Monaco editor with C++, Python and Java support.' },
+  { title: 'Climb the ranks', desc: 'Standings update live as you and your rivals pass testcases.' },
+];
 
 export default function LandingPage({ user }) {
-  if (user) {
-    return <Navigate to="/dashboard" />;
-  }
+  if (user) return <Navigate to="/dashboard" />;
 
   return (
-    <div style={{ position: 'relative', minHeight: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4rem 1rem', overflowX: 'hidden' }}>
-      <div className="container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', zIndex: 1 }}>
-        
-        {/* Hero Section */}
-        <div style={{ textAlign: 'center', marginBottom: '5rem' }} className="fade-in-up">
-          <div style={{ marginBottom: '1.5rem', display: 'inline-block' }}>
-            <div style={{ fontSize: '4rem', letterSpacing: '-0.03em', fontFamily: 'Inter, sans-serif' }}>
-              <span className="text-orange">Compi</span><span className="text-white">Code</span>
-            </div>
+    <div className="container" style={{ paddingTop: '3rem' }}>
+      {/* Hero */}
+      <section className="hero-grid fade-in-up" style={{ marginBottom: '6.5rem' }}>
+        <div>
+          <div className="display-stack">
+            <span className="d-num">3</span>
+            <span className="d-mid">Ways to</span>
+            <span className="d-xl">Compete</span>
           </div>
-          <p className="fade-in-up" style={{ animationDelay: '0.2s', fontSize: '1.15rem', color: 'var(--text-secondary)', lineHeight: 1.8, maxWidth: '650px', margin: '0 auto 2.5rem', fontWeight: 400 }}>
-            A competitive programming platform with real-time multiplayer contests, automated judging, and live leaderboards.
+          <p className="muted" style={{ fontSize: '1.1rem', lineHeight: 1.7, maxWidth: 520, margin: '1.75rem 0 2rem' }}>
+            A competitive programming arena with real-time multiplayer contests, automated judging and live standings.
           </p>
-          <div className="fade-in-up" style={{ animationDelay: '0.4s' }}>
-            <Link to="/auth" className="btn btn-primary hover-lift" style={{ padding: '1rem 3rem', fontSize: '1.1rem', borderRadius: '8px', textDecoration: 'none', display: 'inline-block', boxShadow: '0 4px 15px var(--primary-subtle)' }}>
-              Start Coding Now
-            </Link>
+          <div className="flex" style={{ flexWrap: 'wrap' }}>
+            <Link to="/auth" className="btn btn-primary btn-lg">Start coding <Icon name="arrow-right" size={20} /></Link>
+            <a href="#modes" className="btn btn-secondary btn-lg">See the modes</a>
           </div>
         </div>
 
-        {/* Feature Cards Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem', width: '100%', maxWidth: '1000px', marginBottom: '6rem' }}>
-          {[
-            { icon: '⚡', title: 'Sudden Death', desc: 'All players solve the same problem simultaneously. The first to pass claims the round and the lobby advances.', delay: '0.6s' },
-            { icon: '⏱', title: 'Timed Mode', desc: 'Each problem has its own countdown. Players work independently and must solve within the per-problem time limit.', delay: '0.7s' },
-            { icon: '📋', title: 'Standard Mode', desc: 'Players solve all problems independently within a global time limit. Ranked by score then lowest penalty time.', delay: '0.8s' },
-          ].map((card, i) => (
-            <div key={i} className="glass-panel hover-lift fade-in-up" style={{ padding: '2rem', borderLeft: '4px solid var(--primary)', animationDelay: card.delay, cursor: 'default' }}>
-              <h3 style={{ marginBottom: '1rem', fontSize: '1.2rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <span style={{ fontSize: '1.5rem' }}>{card.icon}</span> <span style={{ color: 'var(--text-primary)' }}>{card.title}</span>
-              </h3>
-              <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.7 }}>{card.desc}</p>
+        <div className="bcard" style={{ marginTop: '1.5rem' }}>
+          <span className="bubble"><Icon name="trophy" size={26} /></span>
+          <h3 className="bcard-title">Built for the arena</h3>
+          <ul className="bcard-list">
+            <li>Real-time leaderboards over WebSockets</li>
+            <li>Sandboxed judge for C++, Python and Java</li>
+            <li>Private contests with host approval</li>
+            <li>Hidden testcases and per-problem points</li>
+          </ul>
+        </div>
+      </section>
+
+      {/* Modes timeline */}
+      <section id="modes" style={{ marginBottom: '6rem' }}>
+        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          <span className="eyebrow">Pick your format</span>
+          <h2 style={{ fontSize: 'clamp(2rem, 5vw, 3.2rem)', marginTop: '0.4rem' }}>Three contest modes</h2>
+        </div>
+        <div className="zz">
+          {MODES.map((m, i) => {
+            const meta = MODE_META[m.key];
+            return (
+              <div key={m.key} className={`zz-item ${m.side} fade-in-up`} style={{ animationDelay: `${0.1 + i * 0.1}s` }}>
+                <span className="node" />
+                <div className={`bcard ${m.filled ? 'is-filled' : ''} ${m.side === 'right' ? 'bubble-left' : ''}`}>
+                  <span className="bubble"><Icon name={meta.icon} size={26} /></span>
+                  <h3 className="bcard-title">{meta.label}</h3>
+                  <ul className="bcard-list">{m.points.map(p => <li key={p}>{p}</li>)}</ul>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section style={{ marginBottom: '6rem' }}>
+        <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
+          <span className="eyebrow">From zero to ranked</span>
+          <h2 style={{ fontSize: 'clamp(2rem, 5vw, 3.2rem)', marginTop: '0.4rem' }}>How it works</h2>
+        </div>
+        <div className="grid grid-3" style={{ gap: '2.5rem 1.5rem' }}>
+          {STEPS.map((s, i) => (
+            <div key={s.title} className="bcard bcard-sm fade-in-up" style={{ animationDelay: `${i * 0.1}s` }}>
+              <span className="bubble step-num">{i + 1}</span>
+              <h3 className="bcard-title" style={{ fontSize: '1.15rem' }}>{s.title}</h3>
+              <p className="bcard-text">{s.desc}</p>
             </div>
           ))}
         </div>
+      </section>
 
-        {/* How It Works Section */}
-        <div style={{ width: '100%', maxWidth: '1000px', marginBottom: '6rem', textAlign: 'center' }}>
-          <h2 style={{ fontSize: '2rem', marginBottom: '3rem', color: 'var(--text-primary)', fontWeight: 800 }}>How It Works</h2>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', justifyContent: 'center' }}>
-            {[
-              { step: '1', title: 'Join a Lobby', desc: 'Host a private contest or join an existing arena with your friends.' },
-              { step: '2', title: 'Write Code', desc: 'Use our built-in Monaco editor to write fast, efficient solutions.' },
-              { step: '3', title: 'Climb the Ranks', desc: 'Watch the live leaderboard update as you and your opponents pass testcases.' }
-            ].map((item, i) => (
-              <div key={i} className="hover-lift" style={{ flex: '1 1 300px', background: 'var(--bg-secondary)', padding: '2rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'var(--primary-subtle)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', fontWeight: 800, margin: '0 auto 1.5rem' }}>{item.step}</div>
-                <h4 style={{ fontSize: '1.2rem', marginBottom: '0.75rem', color: 'var(--text-primary)' }}>{item.title}</h4>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: 1.6 }}>{item.desc}</p>
-              </div>
-            ))}
-          </div>
+      {/* CTA */}
+      <section style={{ maxWidth: 760, margin: '0 auto', width: '100%' }}>
+        <div className="bcard is-filled bubble-left" style={{ textAlign: 'center', padding: '3rem 2rem 2.4rem' }}>
+          <span className="bubble"><Icon name="code" size={26} /></span>
+          <h2 style={{ fontSize: 'clamp(1.8rem, 4.5vw, 2.6rem)' }}>Ready to prove your skills?</h2>
+          <p className="bcard-text" style={{ margin: '0 0 1.75rem' }}>C++ · Python 3 · Java — create a free account and enter the arena.</p>
+          <Link to="/auth" className="btn btn-primary btn-lg">Create free account</Link>
         </div>
-
-        {/* Supported Languages */}
-        <div style={{ width: '100%', maxWidth: '800px', marginBottom: '6rem', textAlign: 'center' }}>
-          <h2 style={{ fontSize: '1.8rem', marginBottom: '2rem', color: 'var(--text-primary)' }}>Supported Languages</h2>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', flexWrap: 'wrap' }}>
-            {['C++', 'Python 3', 'Java'].map((lang, i) => (
-              <div key={i} className="hover-lift" style={{ padding: '1rem 2rem', background: 'var(--panel-bg)', border: '1px solid var(--border-color)', borderRadius: '8px', boxShadow: 'var(--shadow-sm)', fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                {lang}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* CTA Footer */}
-        <div className="glass-panel hover-lift" style={{ width: '100%', maxWidth: '800px', padding: '3rem 2rem', textAlign: 'center', background: 'linear-gradient(135deg, var(--panel-bg) 0%, var(--primary-subtle) 100%)', border: '1px solid var(--border-color)' }}>
-          <h2 style={{ fontSize: '2rem', marginBottom: '1rem', color: 'var(--text-primary)' }}>Ready to Prove Your Skills?</h2>
-          <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', marginBottom: '2.5rem' }}>Join today and compete against developers worldwide.</p>
-          <Link to="/auth" className="btn btn-primary hover-lift" style={{ padding: '0.9rem 2.5rem', fontSize: '1rem', borderRadius: '8px', textDecoration: 'none', display: 'inline-block' }}>
-            Create Free Account
-          </Link>
-        </div>
-
-      </div>
+      </section>
     </div>
   );
 }

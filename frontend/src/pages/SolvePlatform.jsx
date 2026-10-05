@@ -4,11 +4,85 @@ import axios from 'axios';
 import Editor from '@monaco-editor/react';
 import { API_URL, WS_URL, boilerplates, formatTime } from '../config';
 import CodeforcesStandings from '../components/CodeforcesStandings';
+import ConfirmModal from '../components/ConfirmModal';
+import Icon from '../components/Icon';
+import { defineArenaThemes, monacoThemeName, onEditorMount, useDocumentTheme, EDITOR_OPTIONS } from '../monacoTheme';
+
+const HIDDEN_FROM = 2; // the first two testcases are shown to the player
+
+/* ---------- Judge verdict ---------- */
+function Verdict({ results }) {
+  // Open on the first failing case that has details to show; hidden cases have none.
+  const firstFail = results.findIndex(r => !r.passed);
+  const firstVisibleFail = results.findIndex((r, i) => !r.passed && i < HIDDEN_FROM);
+  const [sel, setSel] = useState(firstVisibleFail !== -1 ? firstVisibleFail : Math.max(firstFail, 0));
+
+  const passedN = results.filter(r => r.passed).length;
+  const allPass = passedN === results.length;
+  const hasError = results.some(r => r.error);
+  const title = allPass ? 'Accepted' : hasError ? 'Execution error' : 'Wrong answer';
+  const cur = results[sel];
+  const hidden = sel >= HIDDEN_FROM;
+
+  return (
+    <div className={`verdict ${allPass ? 'ok' : 'bad'} fade-in-scale`}>
+      <div className="verdict-head">
+        <span className="verdict-badge"><Icon name={allPass ? 'check' : 'x'} size={28} stroke={2.4} /></span>
+        <div>
+          <div className="verdict-title">{title}</div>
+          <div className="verdict-sub">{passedN} of {results.length} testcases passed</div>
+        </div>
+      </div>
+
+      <div className="case-strip" aria-hidden="true">
+        {results.map((r, i) => <span key={i} className={`case-dot ${r.passed ? 'pass' : 'fail'}`} />)}
+      </div>
+
+      <div className="case-tabs" role="tablist">
+        {results.map((r, i) => (
+          <button key={i} role="tab" aria-selected={sel === i} className={`case-tab ${sel === i ? 'is-on' : ''}`} onClick={() => setSel(i)}>
+            {i >= HIDDEN_FROM && <Icon name="lock" size={12} />}
+            Case {i + 1}
+            <span className={r.passed ? 'ok' : 'no'}><Icon name={r.passed ? 'check' : 'x'} size={13} stroke={2.6} /></span>
+          </button>
+        ))}
+      </div>
+
+      {cur && (
+        hidden ? (
+          <p className="muted" style={{ fontSize: '0.9rem' }}>
+            <Icon name="lock" size={14} style={{ verticalAlign: '-2px', marginRight: 6 }} />
+            Case {sel + 1} is a hidden testcase — it {cur.passed ? 'passed' : 'failed'}, but its data is not shown.
+          </p>
+        ) : (
+          <div className="stack" style={{ gap: '1rem' }}>
+            <div className="case-grid">
+              <div><span className="io-label">Input</span><pre className="io-block">{cur.input || '(empty)'}</pre></div>
+              <div><span className="io-label">Expected</span><pre className="io-block">{cur.expected}</pre></div>
+              {!cur.error && <div><span className="io-label">Your output</span><pre className="io-block">{cur.actual || '(no output)'}</pre></div>}
+            </div>
+            {cur.error && (
+              <div>
+                <span className="io-label">Compiler / runtime message</span>
+                <pre className="err-block" style={{ marginTop: '0.3rem' }}>{cur.error}</pre>
+              </div>
+            )}
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+function TimerChip({ label, value, low }) {
+  return <span className={`timer-chip ${low ? 'low' : ''}`}><span className="tl">{label}</span>{value}</span>;
+}
 
 export default function SolvePlatform() {
   const { contestId, questionId } = useParams();
   const isSuddenDeath = questionId === 'sudden-death';
-  
+  const theme = useDocumentTheme();
+
   const navigate = useNavigate();
   const [language, setLanguage] = useState('cpp');
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -17,20 +91,19 @@ export default function SolvePlatform() {
     return saved !== null ? saved : boilerplates['cpp'];
   });
   const [status, setStatus] = useState('');
-  const [statusColor, setStatusColor] = useState('var(--text-tertiary)');
-  const [sandboxError, setSandboxError] = useState('');
+  const [statusTone, setStatusTone] = useState('neutral'); // neutral | ok | bad
   const [showEndConfirm, setShowEndConfirm] = useState(false);
-  const [userObj, setUserObj] = useState(null);
+  const [kickTarget, setKickTarget] = useState(null);
   const [evalResults, setEvalResults] = useState(null);
+  const [submitCount, setSubmitCount] = useState(0);
   const [qData, setQData] = useState(null);
   const [alreadySolved, setAlreadySolved] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const [sdState, setSdState] = useState(null);
   const [sdGlobalTimer, setSdGlobalTimer] = useState(null);
   const [finalLeaderboard, setFinalLeaderboard] = useState(() => {
-    const cached = localStorage.getItem(`leaderboard_cache_${contestId}`);
-    return cached ? JSON.parse(cached) : [];
+    try { return JSON.parse(localStorage.getItem(`leaderboard_cache_${contestId}`)) || []; } catch { return []; }
   });
   const [roundCountdown, setRoundCountdown] = useState(10);
   const [contestInfo, setContestInfo] = useState(null);
@@ -38,54 +111,71 @@ export default function SolvePlatform() {
   const [currentUser, setCurrentUser] = useState(null);
   const ws = useRef(null);
   const roundCountdownRef = useRef(null);
+  const currentUserRef = useRef(null);
+  const deletingRef = useRef(false);
 
   useEffect(() => {
     axios.get(`${API_URL}/me`).then(res => setCurrentUser(res.data)).catch(() => {});
   }, []);
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
   useEffect(() => {
     if (!isSuddenDeath) {
       setQData(null);
       setAlreadySolved(false);
       setStatus('');
-      setStatusColor('var(--text-tertiary)');
+      setStatusTone('neutral');
       setEvalResults(null);
       setIsSubmitting(false);
       setElapsedSeconds(0);
-      
+
       const saved = localStorage.getItem(`code_${contestId}_${questionId}`);
       setCode(saved !== null ? saved : boilerplates[language]);
-      
+
       fetchQuestionDetailed(questionId);
       axios.get(`${API_URL}/contests/${contestId}/my-solved`).then(res => {
         if ((res.data.solved_question_ids || []).map(String).includes(String(questionId))) {
           setAlreadySolved(true);
-          setStatus('Already Solved');
-          setStatusColor('var(--success)');
+          setStatus('Already solved');
+          setStatusTone('ok');
         }
       }).catch(() => {});
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contestId, questionId]);
 
   useEffect(() => {
     const fetchInfo = () => {
       axios.get(`${API_URL}/contests/${contestId}/info`).then(res => {
         setContestInfo(res.data);
-        if (res.data.status === 'ended') {
-          navigate(`/contest/${contestId}`);
+        // Sudden death shows its own "Match over" screen when it finishes naturally.
+        if (res.data.status === 'ended' && !isSuddenDeath) navigate(`/contest/${contestId}`);
+      }).catch((err) => {
+        if (err.response?.status === 404 && !deletingRef.current) {
+          deletingRef.current = true;
+          alert('This contest was deleted by its host.');
+          navigate('/dashboard');
         }
-      }).catch(() => {});
+      });
     };
     fetchInfo();
     const infoInterval = setInterval(fetchInfo, 5000);
 
     ws.current = new WebSocket(`${WS_URL}/ws/contest/${contestId}`);
     ws.current.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
+      let msg;
+      try { msg = JSON.parse(event.data); } catch { return; }
+      const me = currentUserRef.current;
       if (msg.type === 'CONTEST_ENDED') {
         navigate(`/contest/${contestId}`);
-      } else if (msg.type === 'KICK_USER' && currentUser && msg.user_id === currentUser.id) {
-        alert("You have been kicked from the contest by the host.");
+      } else if (msg.type === 'CONTEST_DELETED') {
+        if (!deletingRef.current) {
+          deletingRef.current = true;
+          alert('This contest was deleted by its host.');
+          navigate('/dashboard');
+        }
+      } else if (msg.type === 'KICK_USER' && me && msg.user_id === me.id) {
+        alert('You have been kicked from the contest by the host.');
         navigate('/dashboard');
       } else if (isSuddenDeath) {
         if (msg.type === 'SYNC_STATE') {
@@ -96,27 +186,48 @@ export default function SolvePlatform() {
         }
       }
     };
-    
+
     return () => {
       clearInterval(infoInterval);
       if (ws.current) ws.current.close();
       if (roundCountdownRef.current) clearInterval(roundCountdownRef.current);
     };
-  }, [contestId, isSuddenDeath, navigate, currentUser]);
+  }, [contestId, isSuddenDeath, navigate]);
+
+  // Esc leaves the maximised editor.
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const onKey = (e) => { if (e.key === 'Escape') setIsFullscreen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isFullscreen]);
 
   const endContest = async () => {
     try {
+      deletingRef.current = true;
       await axios.post(`${API_URL}/contests/${contestId}/end`);
       setShowEndConfirm(false);
       navigate(`/contest/${contestId}`);
-    } catch(e) { alert('Failed to end contest'); setShowEndConfirm(false); }
+    } catch (e) {
+      deletingRef.current = false;
+      alert(e.response?.data?.detail || 'Failed to end contest');
+      setShowEndConfirm(false);
+    }
   };
 
-  const handleKick = async (uid) => {
-    if (window.confirm('Are you sure you want to kick this user? Their submissions will be deleted.')) {
-      await axios.delete(`${API_URL}/contests/${contestId}/kick/${uid}`);
-      axios.get(`${API_URL}/contests/${contestId}/leaderboard`).then(res => { setFinalLeaderboard(res.data); localStorage.setItem(`leaderboard_cache_${contestId}`, JSON.stringify(res.data)); });
-    }
+  const refreshLeaderboard = () => axios.get(`${API_URL}/contests/${contestId}/leaderboard`).then(res => {
+    setFinalLeaderboard(res.data);
+    try { localStorage.setItem(`leaderboard_cache_${contestId}`, JSON.stringify(res.data)); } catch { /* ignore */ }
+  }).catch(() => {});
+
+  const confirmKick = async () => {
+    const target = kickTarget;
+    setKickTarget(null);
+    if (!target) return;
+    try {
+      await axios.delete(`${API_URL}/contests/${contestId}/kick/${target.id}`);
+      refreshLeaderboard();
+    } catch (e) { alert(e.response?.data?.detail || 'Failed to kick participant'); }
   };
 
   useEffect(() => {
@@ -132,7 +243,7 @@ export default function SolvePlatform() {
           if (!localStorage.getItem(lsKey)) localStorage.setItem(lsKey, Date.now().toString());
           start = parseInt(localStorage.getItem(lsKey));
         }
-        
+
         const updateTimer = () => {
           const currentElapsed = Math.floor((Date.now() - start) / 1000);
           setElapsedSeconds(currentElapsed);
@@ -140,7 +251,7 @@ export default function SolvePlatform() {
             navigate(`/contest/${contestId}`);
           }
         };
-        
+
         updateTimer();
         const interval = setInterval(updateTimer, 1000);
         return () => clearInterval(interval);
@@ -148,55 +259,53 @@ export default function SolvePlatform() {
         const questions = contestInfo.questions || [];
         const q = questions.find(x => String(x.id) === String(questionId));
         if (q) {
-           const timeLimit = q.time_limit;
-           const lsKey = `contest_${contestId}_q_${questionId}_start`;
-           if (!localStorage.getItem(lsKey)) localStorage.setItem(lsKey, Date.now().toString());
-           const start = parseInt(localStorage.getItem(lsKey));
-           const initialElapsed = Math.floor((Date.now() - start) / 1000);
-           if (initialElapsed >= timeLimit) {
-             setElapsedSeconds(timeLimit);
-             setStatus('Time Up! Locked');
-             setStatusColor('var(--danger)');
-             setAlreadySolved(true);
-           } else {
-             setElapsedSeconds(initialElapsed);
-           }
-           const interval = setInterval(() => {
-             const elapsed = Math.floor((Date.now() - start) / 1000);
-             if (elapsed >= timeLimit) {
-                 setElapsedSeconds(timeLimit);
-                 setStatus('Time Up! Auto-submitting...');
-                 setStatusColor('var(--danger)');
-                 setAlreadySolved(true);
-                 clearInterval(interval);
-                 if (executeSubmissionRef.current) {
-                     executeSubmissionRef.current(null, true);
-                 }
-             } else {
-                 setElapsedSeconds(elapsed);
-             }
-           }, 1000);
-           return () => clearInterval(interval);
+          const timeLimit = q.time_limit;
+          const lsKey = `contest_${contestId}_q_${questionId}_start`;
+          if (!localStorage.getItem(lsKey)) localStorage.setItem(lsKey, Date.now().toString());
+          const start = parseInt(localStorage.getItem(lsKey));
+          const initialElapsed = Math.floor((Date.now() - start) / 1000);
+          if (initialElapsed >= timeLimit) {
+            setElapsedSeconds(timeLimit);
+            setStatus('Time is up — locked');
+            setStatusTone('bad');
+            setAlreadySolved(true);
+          } else {
+            setElapsedSeconds(initialElapsed);
+          }
+          const interval = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - start) / 1000);
+            if (elapsed >= timeLimit) {
+              setElapsedSeconds(timeLimit);
+              setStatus('Time is up — auto-submitting');
+              setStatusTone('bad');
+              setAlreadySolved(true);
+              clearInterval(interval);
+              if (executeSubmissionRef.current) {
+                executeSubmissionRef.current(null, true);
+              }
+            } else {
+              setElapsedSeconds(elapsed);
+            }
+          }, 1000);
+          return () => clearInterval(interval);
         }
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSuddenDeath, contestInfo, questionId, contestId]);
 
   useEffect(() => {
     if (isSuddenDeath && sdState && sdState.state === 'WAITING_TO_START') {
-      axios.get(`${API_URL}/contests/${contestId}/leaderboard`).then(res => { setFinalLeaderboard(res.data); localStorage.setItem(`leaderboard_cache_${contestId}`, JSON.stringify(res.data)); });
-      const interval = setInterval(() => {
-        axios.get(`${API_URL}/contests/${contestId}/leaderboard`).then(res => { setFinalLeaderboard(res.data); localStorage.setItem(`leaderboard_cache_${contestId}`, JSON.stringify(res.data)); });
-      }, 5000);
+      refreshLeaderboard();
+      const interval = setInterval(refreshLeaderboard, 5000);
       return () => clearInterval(interval);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSuddenDeath, sdState?.state, contestId]);
 
   useEffect(() => {
     if (isSuddenDeath && sdState) {
-      if (sdState.state === 'CONTEST_OVER' || sdState.state === 'ROUND_OVER') {
-        axios.get(`${API_URL}/contests/${contestId}/leaderboard`).then(res => { setFinalLeaderboard(res.data); localStorage.setItem(`leaderboard_cache_${contestId}`, JSON.stringify(res.data)); });
-      }
+      if (sdState.state === 'CONTEST_OVER' || sdState.state === 'ROUND_OVER') refreshLeaderboard();
       if (sdState.state === 'ROUND_OVER') {
         setRoundCountdown(10);
         if (roundCountdownRef.current) clearInterval(roundCountdownRef.current);
@@ -216,13 +325,14 @@ export default function SolvePlatform() {
         setEvalResults(null);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sdState, contestId, isSuddenDeath]);
 
   const fetchQuestionDetailed = async (qid) => {
     try {
       const resp = await axios.get(`${API_URL}/questions/${qid}`);
       setQData(resp.data);
-    } catch {}
+    } catch { /* keep the previous problem on screen */ }
   };
 
   const handleLanguageChange = (e) => {
@@ -240,7 +350,7 @@ export default function SolvePlatform() {
     if ((alreadySolved && !isAutoSubmit) || isSubmitting) return;
     setIsSubmitting(true);
     setStatus('');
-    setStatusColor('var(--text-tertiary)');
+    setStatusTone('neutral');
     setEvalResults(null);
     try {
       const activeQ = qData ? qData.id : questionId;
@@ -248,304 +358,228 @@ export default function SolvePlatform() {
         code, language, question_id: String(activeQ), contest_id: String(contestId)
       });
       if (res.data.already_solved) {
-        setStatus('Already Solved!');
-        setStatusColor('var(--success)');
+        setStatus('Already solved');
+        setStatusTone('ok');
         setAlreadySolved(true);
       } else if (res.data.error) {
         setStatus(res.data.error);
-        setStatusColor('var(--danger)');
+        setStatusTone('bad');
       } else {
         setEvalResults(res.data.results);
+        setSubmitCount(c => c + 1);
         if (res.data.passed) {
-          setStatus('Accepted ✔');
-          setStatusColor('var(--success)');
+          setStatus('Accepted');
+          setStatusTone('ok');
           setAlreadySolved(true);
         } else {
-          setStatus('Wrong Answer');
-          setStatusColor('var(--danger)');
+          setStatus(res.data.results.some(r => r.error) ? 'Execution error' : 'Wrong answer');
+          setStatusTone('bad');
         }
       }
     } catch (err) {
-      const detail = err.response?.data?.detail || 'Submission failed. Please try again.';
-      setStatus(detail);
-      setStatusColor('var(--danger)');
+      setStatus(err.response?.data?.detail || 'Submission failed. Please try again.');
+      setStatusTone('bad');
     } finally {
       setIsSubmitting(false);
     }
   };
-  
+
+  const isHost = !!(currentUser && contestInfo && currentUser.id === contestInfo.host_id);
+  const standingsFor = (title) => (
+    <div className="panel fade-in-up" style={{ width: '100%', maxWidth: 940, textAlign: 'left' }}>
+      <CodeforcesStandings leaderboard={finalLeaderboard} questions={contestInfo?.questions} title={title} mode="sudden_death" isHost={isHost} meId={currentUser?.id} onKick={(id, name) => setKickTarget({ id, name })} />
+    </div>
+  );
+  const kickModal = (
+    <ConfirmModal open={!!kickTarget} tone="danger" title="Kick participant" confirmLabel="Kick" onConfirm={confirmKick} onCancel={() => setKickTarget(null)}>
+      Remove <strong style={{ color: 'var(--text-primary)' }}>{kickTarget?.name}</strong> from the contest? All of their submissions will be deleted.
+    </ConfirmModal>
+  );
+
+  /* ---------- Sudden death: full-screen states ---------- */
   if (isSuddenDeath && sdState && sdState.state === 'WAITING_TO_START') {
-    return <div className="sudden-death-overlay fade-in">
-      <h1 className="pulse-text" style={{ fontSize: '2.5rem', color: 'var(--text-primary)', textTransform: 'uppercase', marginBottom: '0.5rem', fontWeight: 800, letterSpacing: '-0.02em' }}>Waiting for Match Start</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', fontSize: '1rem' }}>The host will initiate the match shortly.</p>
-      {finalLeaderboard.length > 0 && (
-        <div className="glass-panel fade-in-up" style={{ width: '100%', maxWidth: '900px', textAlign: 'left' }}>
-          <CodeforcesStandings leaderboard={finalLeaderboard} questions={contestInfo?.questions} title="Current Standings" mode="sudden_death" isHost={currentUser && contestInfo && currentUser.id === contestInfo.host_id} onKick={handleKick} />
+    return (
+      <div className="center-screen fade-in" style={{ justifyContent: 'flex-start', paddingTop: '4rem' }}>
+        <div className="bcard" style={{ '--cx': '50%', width: '100%', maxWidth: 560, textAlign: 'center', padding: '3rem 2rem 2rem', marginBottom: '2.5rem' }}>
+          <span className="bubble"><Icon name="hourglass" size={26} /></span>
+          <h1 className="pulse-text" style={{ fontSize: 'clamp(1.8rem, 5vw, 2.6rem)' }}>Waiting for match start</h1>
+          <p className="bcard-text">The host will start the match shortly. Stay on this page.</p>
         </div>
-      )}
-    </div>;
+        {finalLeaderboard.length > 0 && standingsFor('Players in the lobby')}
+        {kickModal}
+      </div>
+    );
   }
 
   if (isSuddenDeath && sdState && sdState.state === 'ROUND_OVER') {
-    return <div className="sudden-death-overlay fade-in" style={{ background: 'var(--panel-bg)', padding: '2rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', width: '100%', maxWidth: '900px' }}>
-        <div className="slide-in-left">
-          <h1 style={{ color: 'var(--text-primary)', fontSize: '2.5rem', margin: 0, fontWeight: 800 }}>Round {sdState.current_q_idx + 1} Complete</h1>
-          <p style={{ color: 'var(--success)', fontWeight: 600, margin: '0.25rem 0 0', fontSize: '1.1rem' }}>Winner: {sdState.winner || 'No winner'}</p>
+    return (
+      <div className="center-screen fade-in" style={{ justifyContent: 'flex-start', paddingTop: '3rem' }}>
+        <div className="flex-between" style={{ width: '100%', maxWidth: 940, marginBottom: '1.75rem', textAlign: 'left' }}>
+          <div className="display-stack sm slide-in-left">
+            <span className="eyebrow">Round {sdState.current_q_idx + 1} complete</span>
+            <span className="d-xl" style={{ fontSize: 'clamp(2rem, 6vw, 3.6rem)' }}>{sdState.winner ? sdState.winner : 'No winner'}</span>
+            <span className="d-mid" style={{ margin: '0.3em 0 0' }}>{sdState.winner ? 'takes the round' : 'time ran out'}</span>
+          </div>
+          <div className="bcard bcard-sm" style={{ textAlign: 'center', minWidth: 170 }}>
+            <span className="bubble"><Icon name="timer" size={20} /></span>
+            <div className="stat-value">{roundCountdown}s</div>
+            <div className="stat-label">Next round</div>
+          </div>
         </div>
-        <div style={{ textAlign: 'right' }} className="fade-in">
-          <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>Next round in <strong style={{ color: 'var(--text-primary)' }}>{roundCountdown}s</strong></div>
-        </div>
+        {standingsFor('Standings')}
+        {kickModal}
       </div>
-      <div className="glass-panel fade-in-up" style={{ width: '100%', maxWidth: '900px', textAlign: 'left' }}>
-        <CodeforcesStandings leaderboard={finalLeaderboard} questions={contestInfo?.questions} title="Standings" mode="sudden_death" isHost={currentUser && contestInfo && currentUser.id === contestInfo.host_id} onKick={handleKick} />
-      </div>
-    </div>;
+    );
   }
 
   if (isSuddenDeath && sdState && sdState.state === 'CONTEST_OVER') {
-    return <div className="sudden-death-overlay fade-in" style={{ background: 'var(--panel-bg)', padding: '2rem' }}>
-      <h1 style={{ color: 'var(--text-primary)', fontSize: '3.5rem', marginBottom: '0.5rem', fontWeight: 800, letterSpacing: '-0.03em' }}>Match Over</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Final results below</p>
-      <div className="glass-panel fade-in-up stagger-1" style={{ width: '100%', maxWidth: '900px', textAlign: 'left', marginBottom: '1.5rem' }}>
-        <CodeforcesStandings leaderboard={finalLeaderboard} questions={contestInfo?.questions} title="Final Standings" mode="sudden_death" isHost={currentUser && contestInfo && currentUser.id === contestInfo.host_id} onKick={handleKick} />
+    return (
+      <div className="center-screen fade-in" style={{ justifyContent: 'flex-start', paddingTop: '3rem' }}>
+        <div className="display-stack" style={{ alignItems: 'center', marginBottom: '2rem' }}>
+          <span className="eyebrow">Final results</span>
+          <span className="d-xl" style={{ margin: 0 }}>Match over</span>
+        </div>
+        <div style={{ width: '100%', maxWidth: 940, marginBottom: '1.5rem' }}>{standingsFor('Final standings')}</div>
+        <button className="btn btn-primary" onClick={() => navigate('/dashboard')}>Back to dashboard</button>
+        {kickModal}
       </div>
-      <button className="btn btn-primary fade-in-up stagger-2" onClick={() => navigate('/')} style={{ padding: '0.75rem 2rem' }}>Return to Dashboard</button>
-    </div>;
+    );
   }
 
+  /* ---------- Problem + editor ---------- */
   const timedQuestions = (!isSuddenDeath && contestInfo && contestInfo.mode === 'timed' && contestInfo.questions) ? contestInfo.questions : [];
-  const isHost = currentUser && contestInfo && currentUser.id === contestInfo.host_id;
+  const activeContestQ = contestInfo?.questions?.find(x => String(x.id) === String(qData?.id || questionId));
+  const overallRemaining = contestInfo?.overall_time_limit ? Math.max(0, contestInfo.overall_time_limit * 60 - elapsedSeconds) : 0;
+  const timedQ = timedQuestions.find(x => String(x.id) === String(questionId));
+  const timedRemaining = timedQ ? Math.max(0, timedQ.time_limit - elapsedSeconds) : 0;
+  const passedCount = evalResults ? evalResults.filter(r => r.passed).length : 0;
+
+  const statusEl = status && (
+    <span className="submit-state" style={{ color: statusTone === 'ok' ? 'var(--success)' : statusTone === 'bad' ? 'var(--danger)' : 'var(--text-secondary)' }}>
+      {statusTone !== 'neutral' && <Icon name={statusTone === 'ok' ? 'check' : 'x'} size={16} stroke={2.6} />}
+      {status}
+    </span>
+  );
 
   return (
-    <div className="solve-container" style={isFullscreen ? { transform: 'none', animation: 'none' } : {}}>
-      <div className="fade-in" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="btn btn-secondary" onClick={() => navigate(-1)} style={{ padding: '0.4rem 0.8rem' }}>&larr; Back</button>
-          {isHost && (
-            <button className="btn btn-danger" onClick={() => setShowEndConfirm(true)} style={{ padding: '0.4rem 0.8rem' }}>End Contest</button>
-          )}
+    <div className="solve-container">
+      <div className="flex-between fade-in">
+        <div className="flex">
+          <button className="btn btn-secondary btn-sm" onClick={() => navigate(-1)}><Icon name="arrow-left" size={16} /> Back</button>
+          {isHost && <button className="btn btn-danger btn-sm" onClick={() => setShowEndConfirm(true)}>End contest</button>}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          {isSuddenDeath && sdGlobalTimer !== null && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Round Time:</span>
-              <span style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-primary)', background: 'var(--badge-bg)', padding: '0.2rem 1rem', borderRadius: '4px', border: '1px solid var(--border-color)', fontFamily: 'Consolas, monospace' }}>
-                {formatTime(sdGlobalTimer)}
-              </span>
-            </div>
-          )}
-          {!isSuddenDeath && contestInfo && contestInfo.mode === 'standard' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Time Left:</span>
-              <span style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-primary)', background: 'var(--badge-bg)', padding: '0.2rem 1rem', borderRadius: '4px', border: '1px solid var(--border-color)', fontFamily: 'Consolas, monospace' }}>
-                {formatTime(Math.max(0, contestInfo.overall_time_limit * 60 - elapsedSeconds))}
-              </span>
-            </div>
-          )}
+        <div className="flex" style={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {isSuddenDeath && sdGlobalTimer !== null && <TimerChip label="Contest time" value={formatTime(sdGlobalTimer)} low={sdGlobalTimer <= 60} />}
+          {!isSuddenDeath && contestInfo && contestInfo.mode === 'standard' && <TimerChip label="Time left" value={formatTime(overallRemaining)} low={overallRemaining <= 60} />}
           {!isSuddenDeath && contestInfo && contestInfo.mode === 'timed' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Time Left:</span>
-              <span style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--danger)', background: 'var(--badge-bg)', padding: '0.2rem 1rem', borderRadius: '4px', border: '1px solid var(--border-color)', fontFamily: 'Consolas, monospace' }}>
-                {(() => {
-                  const questions = contestInfo.questions || [];
-                  const q = questions.find(x => String(x.id) === String(questionId));
-                  if (!q) return '0:00';
-                  return formatTime(Math.max(0, q.time_limit - elapsedSeconds));
-                })()}
-              </span>
-            </div>
+            <>
+              {contestInfo.overall_time_limit ? <TimerChip label="Contest" value={formatTime(overallRemaining)} low={overallRemaining <= 60} /> : null}
+              <TimerChip label="This problem" value={formatTime(timedRemaining)} low={timedRemaining <= 30} />
+            </>
           )}
-          {isSuddenDeath && <span className="badge badge-orange">SUDDEN DEATH — ROUND {sdState ? sdState.current_q_idx + 1 : 1}</span>}
+          {isSuddenDeath && <span className="badge badge-solid"><Icon name="bolt" size={12} /> Round {sdState ? sdState.current_q_idx + 1 : 1}</span>}
         </div>
       </div>
 
       {timedQuestions.length > 0 && (
-        <div className="fade-in-up stagger-1" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', padding: '0.5rem 0' }}>
-          {timedQuestions.map((tq, idx) => {
-            const isActive = String(tq.id) === String(questionId);
-            return (
-              <Link
-                key={tq.id}
-                to={`/solve/${contestId}/${tq.id}`}
-                className="btn"
-                style={{
-                  padding: '0.4rem 1rem',
-                  fontSize: '0.85rem',
-                  background: isActive ? 'var(--primary)' : 'var(--badge-bg)',
-                  color: isActive ? 'var(--bg-color)' : 'var(--text-secondary)',
-                  borderRadius: '4px',
-                  textDecoration: 'none',
-                  border: isActive ? '2px solid var(--primary)' : '1px solid var(--border-color)',
-                  transition: 'all 0.15s'
-                }}
-              >
-                Q{idx + 1}: {tq.title}
-              </Link>
-            );
-          })}
+        <div className="flex fade-in-up" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
+          {timedQuestions.map((tq, idx) => (
+            <Link key={tq.id} to={`/solve/${contestId}/${tq.id}`} className={`case-tab ${String(tq.id) === String(questionId) ? 'is-on' : ''}`}>
+              {String.fromCharCode(65 + idx)}. {tq.title}
+            </Link>
+          ))}
         </div>
       )}
-      
-      <div className="problem-title fade-in-up stagger-1">
-        <h1 style={{ margin: 0, color: 'var(--text-primary)' }}>{qData ? qData.title : 'Loading Problem...'}</h1>
-        <span className="badge badge-yellow" style={{ marginLeft: '1rem' }}>Problem</span>
-      </div>
-      
-      <div className="problem-desc fade-in-up stagger-2">
-        <div style={{ whiteSpace: 'pre-wrap', fontWeight: 500, color: 'var(--text-primary)', fontSize: '0.95rem', lineHeight: '1.7' }}>
-          {qData ? (
-            qData.description.split('\n').map((line, i) => {
-              if (line.trim().startsWith('###')) {
-                return <strong key={i} style={{ display: 'block', marginTop: '1.2rem', marginBottom: '0.4rem', color: 'var(--text-primary)', fontSize: '1.1rem' }}>{line.replace('###', '').trim()}</strong>;
-              }
-              return <React.Fragment key={i}>{line}{'\n'}</React.Fragment>;
-            })
-          ) : 'Please wait.'}
-        </div>
 
-        {qData && qData.test_cases.slice(0, 2).map((tc, idx) => (
-          <div key={idx} className="example-block hover-lift" style={{ marginTop: '1.5rem' }}>
-            <strong style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-primary)' }}>Example {idx + 1}:</strong>
-            <div style={{ marginBottom: '0.5rem' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Input:</span>
-              <pre style={{ marginTop: '0.25rem', background: 'var(--code-bg)', padding: '0.75rem', borderRadius: '4px', border: '1px solid var(--code-border)', color: 'var(--text-primary)' }}>{tc.input}</pre>
-            </div>
-            <div>
-              <span style={{ color: 'var(--text-secondary)' }}>Output:</span>
-              <pre style={{ marginTop: '0.25rem', background: 'var(--code-bg)', padding: '0.75rem', borderRadius: '4px', border: '1px solid var(--code-border)', color: 'var(--text-primary)' }}>{tc.expected}</pre>
-            </div>
+      <section className="panel fade-in-up">
+        <div className="problem-title">
+          <h1 style={{ fontSize: 'clamp(1.6rem, 4vw, 2.3rem)' }}>{qData ? qData.title : 'Loading problem…'}</h1>
+          {activeContestQ?.points ? <span className="badge badge-outline">{activeContestQ.points} pts</span> : null}
+        </div>
+        <div className="problem-desc">
+          <div className="problem-body">
+            {qData ? (
+              qData.description.split('\n').map((line, i) => {
+                if (line.trim().startsWith('###')) return <strong key={i}>{line.replace('###', '').trim()}</strong>;
+                return <React.Fragment key={i}>{line}{'\n'}</React.Fragment>;
+              })
+            ) : 'Please wait…'}
           </div>
-        ))}
-      </div>
-      
-      <div className={isFullscreen ? 'editor-fullscreen' : 'editor-wrapper'} style={isFullscreen ? {position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 9999, background: 'var(--editor-bg)', display: 'flex', flexDirection: 'column'} : {animation: 'fadeInUp 0.6s ease-out 0.2s both'}}>
+
+          {qData && qData.test_cases.slice(0, HIDDEN_FROM).map((tc, idx) => (
+            <div key={idx} className="example-block">
+              <div className="example-title">Example {idx + 1}</div>
+              <div className="case-grid">
+                <div><span className="io-label">Input</span><pre className="io-block">{tc.input}</pre></div>
+                <div><span className="io-label">Output</span><pre className="io-block">{tc.expected}</pre></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className={isFullscreen ? 'editor-fullscreen' : 'editor-wrapper fade-in-up'}>
         <div className="editor-toolbar">
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <select className="form-input" value={language} onChange={handleLanguageChange} style={{ width: 'auto', background: 'var(--panel-bg)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0.4rem 1rem', borderRadius: '4px' }}>
+          <div className="flex">
+            <select className="form-input" value={language} onChange={handleLanguageChange} style={{ width: 'auto', padding: '0.35rem 2.2rem 0.35rem 0.8rem' }} aria-label="Language">
               <option value="cpp">C++</option>
               <option value="python">Python</option>
               <option value="java">Java</option>
             </select>
-            <button className="btn btn-secondary" onClick={() => setIsFullscreen(!isFullscreen)} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem', background: 'transparent', border: '1px solid var(--border-color)' }}>
-              {isFullscreen ? 'Exit Fullscreen' : 'Maximize Editor'}
+            <button className="btn btn-ghost btn-sm" onClick={() => setIsFullscreen(!isFullscreen)}>
+              <Icon name={isFullscreen ? 'minimize' : 'maximize'} size={15} /> {isFullscreen ? 'Exit (Esc)' : 'Maximize'}
             </button>
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <span style={{ fontSize: '1rem', color: statusColor || 'var(--text-tertiary)', marginRight: '1.5rem', fontWeight: 700 }}>
-              {status}
-            </span>
-            <button
-              className={`btn ${alreadySolved ? 'btn-secondary' : 'btn-primary'}`}
-              onClick={executeSubmission}
-              disabled={alreadySolved || isSubmitting}
-              style={{ padding: '0.5rem 2.5rem', borderRadius: '0', opacity: (alreadySolved || isSubmitting) ? 0.6 : 1, cursor: (alreadySolved || isSubmitting) ? 'not-allowed' : 'pointer' }}
-            >
-              {alreadySolved ? '✓ Solved' : isSubmitting ? 'Evaluating...' : 'Submit'}
+          <div className="flex" style={{ gap: '1rem' }}>
+            {statusEl}
+            <button className={`btn ${alreadySolved ? 'btn-secondary' : 'btn-primary'}`} onClick={executeSubmission} disabled={alreadySolved || isSubmitting}>
+              {alreadySolved ? <><Icon name="check" size={16} stroke={2.4} /> Solved</> : isSubmitting ? 'Judging…' : <><Icon name="play" size={14} /> Submit</>}
             </button>
           </div>
         </div>
-        <div style={{ height: '400px', background: 'var(--editor-bg)' }}>
+        <div style={{ height: isFullscreen ? undefined : 420, flex: isFullscreen ? 1 : undefined, minHeight: 0, background: 'var(--editor-bg)' }}>
           <Editor
             height="100%"
-            theme={document.documentElement.getAttribute('data-theme') === 'dark' ? 'vs-dark' : 'vs-dark'}
+            theme={monacoThemeName(theme)}
+            beforeMount={defineArenaThemes}
+            onMount={onEditorMount}
             language={language === 'cpp' ? 'cpp' : language}
             value={code}
             onChange={(val) => { setCode(val); localStorage.setItem(`code_${contestId}_${questionId}`, val); }}
-            options={{
-              minimap: { enabled: false },
-              fontSize: 15,
-              wordWrap: 'on',
-              padding: { top: 16 }
-            }}
+            options={{ ...EDITOR_OPTIONS, fontSize: 14, wordWrap: 'on', padding: { top: 16 }, renderLineHighlight: 'line' }}
           />
         </div>
       </div>
-      
+
       {!isFullscreen && (
-        <div className="testcase-panel fade-in-up stagger-4">
-          <div className="testcase-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-             <span>Console Output</span>
-             {(evalResults || qData) && (
-               <span style={{ fontSize: '0.85rem', color: evalResults ? (evalResults.every(r => r.passed) ? 'var(--success)' : (evalResults.some(r => r.passed) ? 'var(--text-secondary)' : 'var(--danger)')) : 'var(--text-tertiary)', fontWeight: 600, background: 'var(--badge-bg)', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>
-                 {evalResults ? evalResults.filter(r => r.passed).length : 0} / {evalResults ? evalResults.length : (qData?.test_cases?.length || 0)} Testcases Passed
-               </span>
-             )}
+        <section className="testcase-panel fade-in-up stagger-2">
+          <div className="testcase-header">
+            <span>Judge</span>
+            {evalResults && <span className="mono" style={{ fontSize: '0.85rem', letterSpacing: 0, color: passedCount === evalResults.length ? 'var(--success)' : 'var(--text-secondary)' }}>{passedCount} / {evalResults.length} passed</span>}
           </div>
           <div className="testcase-body">
-            {!evalResults && !isSubmitting && <div style={{ color: 'var(--text-tertiary)' }}>You must hit submit to check your code against all hidden testcases...</div>}
-            {isSubmitting && !evalResults && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem' }} className="fade-in">
-                <div style={{ width: '24px', height: '24px', border: '3px solid var(--border-color)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite', flexShrink: 0 }}></div>
-                <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Evaluating your submission...</span>
+            {isSubmitting && (
+              <div className="flex fade-in" style={{ padding: '0.5rem 0' }}>
+                <div className="spinner sm" />
+                <span style={{ fontWeight: 700 }}>Running your code against the testcases…</span>
               </div>
             )}
-            {evalResults && (
-              <div className="fade-in-scale">
-                {evalResults.map((res, i) => {
-                  const isHidden = i >= 2;
-                  
-                  return (
-                    <div key={i} className="test-block hover-lift" style={{ borderLeft: `4px solid ${res.passed ? 'var(--success)' : 'var(--danger)'}`, animationDelay: `${i * 0.1}s` }}>
-                      <div style={{ fontWeight: 700, color: res.passed ? 'var(--success)' : 'var(--danger)', marginBottom: isHidden ? 0 : '0.8rem', fontSize: '0.9rem' }}>
-                        Testcase {i + 1} {isHidden ? '(Hidden) ' : ''}{res.passed ? 'Accepted' : (res.error ? 'Error' : 'Wrong Answer')}
-                      </div>
-                      {!isHidden && (
-                        <div style={{ color: 'var(--text-secondary)', fontFamily: 'Consolas, monospace', fontSize: '0.85rem', lineHeight: '1.6' }}>
-                          <div style={{ marginBottom: '0.75rem' }}>
-                            <span style={{ color: 'var(--text-tertiary)', display: 'block', marginBottom: '0.25rem' }}>Input:</span>
-                            <pre style={{ margin: 0, background: 'var(--code-bg)', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace', border: '1px solid var(--code-border)', color: 'var(--text-primary)' }}>{res.input}</pre>
-                          </div>
-                          <div style={{ marginBottom: '0.75rem' }}>
-                            <span style={{ color: 'var(--text-tertiary)', display: 'block', marginBottom: '0.25rem' }}>Expected:</span>
-                            <pre style={{ margin: 0, background: 'var(--code-bg)', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace', border: '1px solid var(--code-border)', color: 'var(--text-primary)' }}>{res.expected}</pre>
-                          </div>
-                          {!res.error && (
-                            <div>
-                              <span style={{ color: 'var(--text-tertiary)', display: 'block', marginBottom: '0.25rem' }}>Actual:</span>
-                              <pre style={{ margin: 0, background: 'var(--code-bg)', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace', border: '1px solid var(--code-border)', color: 'var(--text-primary)' }}>{res.actual || 'No output'}</pre>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {evalResults.some(r => r.error) && (
-                  <div className="test-block hover-lift" style={{ borderLeft: '4px solid var(--danger)', marginTop: '1rem' }}>
-                    <div style={{ fontWeight: 700, color: 'var(--danger)', marginBottom: '0.8rem', fontSize: '0.9rem' }}>
-                      Compilation / Runtime Error Details
-                    </div>
-                    <div style={{ color: 'var(--text-secondary)', fontFamily: 'Consolas, monospace', fontSize: '0.85rem', lineHeight: '1.6' }}>
-                      <pre style={{ margin: 0, background: 'var(--danger-subtle)', padding: '0.5rem', borderRadius: '4px', overflowX: 'auto', whiteSpace: 'pre-wrap', fontFamily: 'Consolas, monospace', border: '1px solid var(--danger)', color: 'var(--danger)' }}>
-                        {evalResults.find(r => r.error).error}
-                      </pre>
-                    </div>
-                  </div>
-                )}
-              </div>
+            {!isSubmitting && !evalResults && (
+              statusTone === 'bad' && status ? (
+                <div className="banner danger"><Icon name="alert" size={18} /><span>{status}</span></div>
+              ) : (
+                <p className="faint">Submit your solution to run it against every testcase, including hidden ones.</p>
+              )
             )}
+            {!isSubmitting && evalResults && <Verdict key={submitCount} results={evalResults} />}
           </div>
-        </div>
+        </section>
       )}
 
-      {showEndConfirm && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--overlay-bg)', backdropFilter: 'blur(8px)' }}>
-          <div className="fade-in-scale" style={{ background: 'var(--modal-bg)', border: '1px solid var(--border-color)', borderRadius: '12px', width: '90%', maxWidth: '400px', boxShadow: 'var(--shadow-lg)', overflow: 'hidden' }}>
-            <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-color)' }}>
-              <h3 style={{ margin: 0, color: 'var(--danger)', fontSize: '1.1rem' }}>End Contest</h3>
-            </div>
-            <div style={{ padding: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.6' }}>
-              Are you sure you want to end this contest for everyone?
-            </div>
-            <div style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border-color)' }}>
-              <button className="btn btn-secondary" onClick={() => setShowEndConfirm(false)} style={{ padding: '0.4rem 1.5rem' }}>Cancel</button>
-              <button className="btn btn-danger" onClick={endContest} style={{ padding: '0.4rem 1.5rem' }}>End Contest</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal open={showEndConfirm} tone="danger" title="End contest" confirmLabel="End for everyone" onConfirm={endContest} onCancel={() => setShowEndConfirm(false)}>
+        This ends the contest for every participant immediately. Standings are locked and no more submissions are accepted.
+      </ConfirmModal>
+      {kickModal}
     </div>
   );
 }

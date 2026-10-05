@@ -1,5 +1,6 @@
 import asyncio
 import httpx
+from contextlib import asynccontextmanager
 from typing import List, Optional, Dict
 from fastapi import FastAPI, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,7 +25,22 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 300
 pwd_context = CryptContext(schemes=["bcrypt_sha256", "bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-app = FastAPI(title="CompiCode")
+SWEEP_INTERVAL_SECONDS = 30
+MAIN_LOOP: Optional[asyncio.AbstractEventLoop] = None
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    global MAIN_LOOP
+    MAIN_LOOP = asyncio.get_running_loop()
+    sweeper = asyncio.create_task(contest_sweeper())
+    try:
+        yield
+    finally:
+        sweeper.cancel()
+
+
+app = FastAPI(title="CompiCode", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -136,11 +152,15 @@ class ConnectionManager:
         if contest_id not in self.contest_state:
             doc = db.collection("contests").document(contest_id).get()
             limit_sec = 3600
+            initial_state = "WAITING_TO_START"
             if doc.exists:
-                limit_sec = doc.to_dict().get("overall_time_limit", 60) * 60
-            
+                d = doc.to_dict()
+                limit_sec = d.get("overall_time_limit", 60) * 60
+                if d.get("status") == "ended":
+                    initial_state = "CONTEST_OVER"
+
             self.contest_state[contest_id] = {
-                "state": "WAITING_TO_START", 
+                "state": initial_state,
                 "current_q_idx": 0,
                 "active_question_id": None,
                 "winner": None,
@@ -172,15 +192,124 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+# --- Contest time-up handling ---
+# Every mode shares one wall-clock rule: a contest that has been active for
+# longer than `overall_time_limit` minutes is over. The rule is applied lazily
+# by every read/submit path *and* eagerly by the background sweeper, so a
+# contest can no longer stay "active" just because nobody happened to poll it.
+def _parse_ts(value) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", ""))
+    except ValueError:
+        return None
+
+def contest_elapsed_seconds(data: dict) -> float:
+    started = _parse_ts(data.get("start_time"))
+    if not started:
+        return 0.0
+    return max(0.0, (datetime.utcnow() - started).total_seconds())
+
+def contest_time_is_up(data: dict) -> bool:
+    if data.get("status") != "active":
+        return False
+    limit = data.get("overall_time_limit")
+    if not limit or not data.get("start_time"):
+        return False
+    return contest_elapsed_seconds(data) >= limit * 60
+
+def _ended_fields(reason: str) -> dict:
+    return {"status": "ended", "end_reason": reason, "ended_at": datetime.utcnow().isoformat() + "Z"}
+
+def run_async(coro):
+    """Schedule a coroutine from either the event loop or a threadpool thread.
+
+    Sync route handlers run in a worker thread where asyncio.create_task() has
+    no running loop and raises, so fall back to the loop captured at startup.
+    """
+    try:
+        asyncio.get_running_loop().create_task(coro)
+    except RuntimeError:
+        if MAIN_LOOP is not None and MAIN_LOOP.is_running():
+            asyncio.run_coroutine_threadsafe(coro, MAIN_LOOP)
+        else:
+            coro.close()
+
+async def announce_contest_ended(contest_id: str, mode: Optional[str]):
+    state = manager.get_state(contest_id)
+    if mode == "sudden_death" and state:
+        if state["state"] not in ("CONTEST_OVER", "FINISHED"):
+            state["state"] = "CONTEST_OVER"
+            await manager.set_state(contest_id, state)
+        return
+    await manager.broadcast(contest_id, {"type": "CONTEST_ENDED"})
+
+def expire_contest_if_needed(contest_doc, data: dict) -> bool:
+    """End the contest in Firestore if its time is up. Mutates `data` to match."""
+    if not contest_doc.exists or not contest_time_is_up(data):
+        return False
+    contest_doc.reference.update(_ended_fields("time_up"))
+    data["status"] = "ended"
+    data["end_reason"] = "time_up"
+    run_async(announce_contest_ended(contest_doc.id, data.get("mode")))
+    return True
+
+async def persist_contest_ended(contest_id: str, reason: str):
+    """Mark a contest ended in Firestore unless something already ended it."""
+    def _work():
+        ref = db.collection("contests").document(contest_id)
+        snap = ref.get()
+        if snap.exists and snap.to_dict().get("status") == "active":
+            ref.update(_ended_fields(reason))
+    await asyncio.to_thread(_work)
+
+def sweep_expired_contests() -> int:
+    ended = 0
+    active = db.collection("contests").where(filter=FieldFilter("status", "==", "active")).stream()
+    for doc in active:
+        if expire_contest_if_needed(doc, doc.to_dict()):
+            ended += 1
+    return ended
+
+async def contest_sweeper():
+    while True:
+        try:
+            await asyncio.to_thread(sweep_expired_contests)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            print(f"[sweeper] failed: {e}")
+        await asyncio.sleep(SWEEP_INTERVAL_SECONDS)
+
+_ttl_cache: Dict[str, tuple] = {}
+
+def cached(key: str, ttl_seconds: int, loader):
+    now = datetime.utcnow().timestamp()
+    hit = _ttl_cache.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+    value = loader()
+    _ttl_cache[key] = (now + ttl_seconds, value)
+    return value
+
+def username_of(user_id: Optional[str]) -> str:
+    if not user_id:
+        return "Unknown"
+    def _load():
+        doc = db.collection("users").document(user_id).get()
+        return doc.to_dict().get("username", "Unknown") if doc.exists else "Unknown"
+    return cached(f"user:{user_id}", 60, _load)
+
 # --- Async Timer Loop for Sudden Death ---
 async def sudden_death_timer(contest_id: str):
     state = manager.get_state(contest_id)
     if not state: return
-    
-    break_timer = 10 
+
+    break_timer = 10
     state["state"] = "ROUND_OVER"
     await manager.set_state(contest_id, state)
-    
+
     while break_timer > 0:
         await asyncio.sleep(1)
         state = manager.get_state(contest_id)
@@ -188,22 +317,25 @@ async def sudden_death_timer(contest_id: str):
         state["sync_timer"] -= 1
         break_timer -= 1
         await manager.broadcast(contest_id, {"type": "TIMER_TICK", "data": state["sync_timer"]})
-        
+
         if state["sync_timer"] <= 0:
             state["state"] = "CONTEST_OVER"
             await manager.set_state(contest_id, state)
+            await persist_contest_ended(contest_id, "time_up")
             return
 
     state = manager.get_state(contest_id)
+    if not state: return
     state["current_q_idx"] += 1
-    
+
     doc = db.collection("contests").document(contest_id).get()
     cqs = doc.to_dict().get("questions", []) if doc.exists else []
     total_q = len(cqs)
-    
+
     if state["current_q_idx"] >= total_q:
         state["state"] = "CONTEST_OVER"
         await manager.set_state(contest_id, state)
+        await persist_contest_ended(contest_id, "completed")
         return
 
     active_qid = cqs[state["current_q_idx"]].get("question_id")
@@ -211,7 +343,7 @@ async def sudden_death_timer(contest_id: str):
     state["winner"] = None
     state["active_question_id"] = active_qid
     await manager.set_state(contest_id, state)
-    
+
     asyncio.create_task(global_active_timer(contest_id, state["current_q_idx"]))
 
 async def global_active_timer(contest_id: str, q_idx: int):
@@ -219,15 +351,16 @@ async def global_active_timer(contest_id: str, q_idx: int):
     while state and state["state"] == "QUESTION_ACTIVE" and state["current_q_idx"] == q_idx and state["sync_timer"] > 0:
         await asyncio.sleep(1)
         state = manager.get_state(contest_id)
-        if state["state"] != "QUESTION_ACTIVE" or state["current_q_idx"] != q_idx:
-            return 
+        if not state or state["state"] != "QUESTION_ACTIVE" or state["current_q_idx"] != q_idx:
+            return
         state["sync_timer"] -= 1
         await manager.broadcast(contest_id, {"type": "TIMER_TICK", "data": state["sync_timer"]})
-        
+
     state = manager.get_state(contest_id)
-    if state and state["sync_timer"] <= 0:
+    if state and state["state"] == "QUESTION_ACTIVE" and state["current_q_idx"] == q_idx and state["sync_timer"] <= 0:
         state["state"] = "CONTEST_OVER"
         await manager.set_state(contest_id, state)
+        await persist_contest_ended(contest_id, "time_up")
 
 # --- Routes ---
 @app.post("/register")
@@ -352,6 +485,51 @@ def create_contest(contest: ContestCreate, current_user: dict = Depends(get_curr
     })
     return {"message": "Contest created!", "link_code": link_code}
 
+def build_contest_payload(contest_doc) -> dict:
+    """Shared response for the link-code and by-id contest lookups."""
+    data = contest_doc.to_dict()
+    expire_contest_if_needed(contest_doc, data)
+
+    q_data = []
+    for cq in data.get("questions", []):
+        q_doc = db.collection("questions").document(cq["question_id"]).get()
+        if q_doc.exists:
+            q = q_doc.to_dict()
+            q_data.append({
+                "id": q_doc.id,
+                "title": q.get("title"),
+                "description": q.get("description"),
+                "points": cq.get("points"),
+                "time_limit": cq.get("time_limit")
+            })
+
+    return {
+        "id": contest_doc.id,
+        "title": data.get("title"),
+        "description": data.get("description"),
+        "mode": data.get("mode"),
+        "visibility": data.get("visibility", "public"),
+        "status": data.get("status"),
+        "end_reason": data.get("end_reason"),
+        "start_time": data.get("start_time"),
+        "scheduled_start_time": data.get("scheduled_start_time"),
+        "server_elapsed_seconds": contest_elapsed_seconds(data),
+        "host_id": data.get("host_id"),
+        "host_name": username_of(data.get("host_id")),
+        "overall_time_limit": data.get("overall_time_limit"),
+        "penalty_per_wrong_answer": data.get("penalty_per_wrong_answer"),
+        "evaluation_mode": data.get("evaluation_mode", "strict"),
+        "questions": q_data
+    }
+
+def require_host_contest(contest_id: str, current_user: dict):
+    doc = db.collection("contests").document(contest_id).get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Contest not found")
+    if doc.to_dict().get("host_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Only the host can do this")
+    return doc
+
 @app.get("/contests/{link_code}")
 def get_contest(link_code: str):
     contests = db.collection("contests").where(filter=FieldFilter("link_code", "==", link_code)).limit(1).stream()
@@ -362,77 +540,43 @@ def get_contest(link_code: str):
             contest_doc = doc
         else:
             raise HTTPException(status_code=404, detail="Contest not found")
-    data = contest_doc.to_dict()
-    
-    q_data = []
-    for cq in data.get("questions", []):
-        q_doc = db.collection("questions").document(cq["question_id"]).get()
-        if q_doc.exists:
-            q = q_doc.to_dict()
-            q_data.append({
-                "id": q_doc.id, 
-                "title": q.get("title"), 
-                "description": q.get("description"), 
-                "points": cq.get("points"), 
-                "time_limit": cq.get("time_limit")
-            })
-            
-    elapsed = 0
-    if data.get("start_time"):
-        try:
-            st = datetime.fromisoformat(data["start_time"].replace('Z', ''))
-            elapsed = (datetime.utcnow() - st).total_seconds()
-        except:
-            pass
-
-    # Auto-end standard or timed contest if time is up
-    if data.get("mode") in ["standard", "timed"] and data.get("status") == "active" and data.get("overall_time_limit"):
-        if elapsed >= data["overall_time_limit"] * 60:
-            contest_doc.reference.update({"status": "ended"})
-            data["status"] = "ended"
-            asyncio.create_task(manager.broadcast(contest_doc.id, {"type": "CONTEST_ENDED"}))
-
-    return {
-        "id": contest_doc.id,
-        "title": data.get("title"),
-        "description": data.get("description"),
-        "mode": data.get("mode"),
-        "visibility": data.get("visibility", "public"),
-        "status": data.get("status"),
-        "start_time": data.get("start_time"),
-        "scheduled_start_time": data.get("scheduled_start_time"),
-        "server_elapsed_seconds": max(0, elapsed),
-        "host_id": data.get("host_id"),
-        "overall_time_limit": data.get("overall_time_limit"),
-        "penalty_per_wrong_answer": data.get("penalty_per_wrong_answer"),
-        "questions": q_data
-    }
+    return build_contest_payload(contest_doc)
 
 @app.post("/contests/{contest_id}/start")
-async def start_sudden_death_contest(contest_id: str):
+async def start_sudden_death_contest(contest_id: str, current_user: dict = Depends(get_current_user)):
+    doc = require_host_contest(contest_id, current_user)
+    data = doc.to_dict()
+
+    if data.get("status") == "ended":
+        raise HTTPException(status_code=400, detail="This contest has already ended")
+    if data.get("status") == "active":
+        # Idempotent: a scheduled start can fire more than once.
+        return {"success": True, "already_active": True}
+
+    if data.get("mode") != "sudden_death":
+        doc.reference.update({"status": "active", "start_time": datetime.utcnow().isoformat() + "Z"})
+        return {"success": True}
+
     state = manager.get_state(contest_id)
-    doc = db.collection("contests").document(contest_id).get()
-    
     if not state:
-        limit_sec = doc.to_dict().get("overall_time_limit", 60) * 60 if doc.exists else 3600
         state = {
-            "state": "WAITING_TO_START", 
+            "state": "WAITING_TO_START",
             "current_q_idx": 0,
             "active_question_id": None,
             "winner": None,
-            "sync_timer": limit_sec
+            "sync_timer": data.get("overall_time_limit", 60) * 60
         }
         manager.contest_state[contest_id] = state
-        
-    cqs = doc.to_dict().get("questions", []) if doc.exists else []
+
+    cqs = data.get("questions", [])
     q_id = cqs[0]["question_id"] if cqs else None
-    
+
     state["state"] = "QUESTION_ACTIVE"
     state["current_q_idx"] = 0
     state["active_question_id"] = q_id
     await manager.set_state(contest_id, state)
     asyncio.create_task(global_active_timer(contest_id, 0))
-    
+
     doc.reference.update({
         "status": "active",
         "start_time": datetime.utcnow().isoformat() + "Z"
@@ -441,96 +585,62 @@ async def start_sudden_death_contest(contest_id: str):
 
 @app.post("/contests/{contest_id}/open")
 def open_standard_contest(contest_id: str, current_user: dict = Depends(get_current_user)):
-    doc = db.collection("contests").document(contest_id).get()
-    if not doc.exists:
-        raise HTTPException(status_code=404, detail="Contest not found")
-        
+    doc = require_host_contest(contest_id, current_user)
     data = doc.to_dict()
-    if data.get("host_id") != current_user["id"]:
-        raise HTTPException(status_code=403, detail="Only host can open the contest")
-        
+
     if data.get("status") == "active":
         return {"message": "Already active"}
-        
+    if data.get("status") == "ended":
+        raise HTTPException(status_code=400, detail="This contest has already ended")
+
     doc.reference.update({
         "status": "active",
         "start_time": datetime.utcnow().isoformat() + "Z"
     })
     return {"success": True, "message": "Contest opened successfully"}
 
-
-
 @app.post("/contests/{contest_id}/end")
-async def end_contest(contest_id: str):
-    doc_ref = db.collection("contests").document(contest_id)
-    if doc_ref.get().exists:
-        doc_ref.update({"status": "ended"})
-        
+async def end_contest(contest_id: str, current_user: dict = Depends(get_current_user)):
+    doc = require_host_contest(contest_id, current_user)
+    if doc.to_dict().get("status") != "ended":
+        doc.reference.update(_ended_fields("host"))
+
     state = manager.get_state(contest_id)
     if state:
         state["state"] = "FINISHED"
         await manager.set_state(contest_id, state)
-        
+
     await manager.broadcast(contest_id, {"type": "CONTEST_ENDED"})
     return {"success": True, "message": "Contest ended"}
 
+@app.delete("/contests/{contest_id}")
+async def delete_contest(contest_id: str, current_user: dict = Depends(get_current_user)):
+    doc = require_host_contest(contest_id, current_user)
+
+    def _purge():
+        # Firestore batches are capped at 500 writes.
+        refs = [doc.reference]
+        for coll in ("participants", "submissions"):
+            refs += [s.reference for s in db.collection(coll).where(filter=FieldFilter("contest_id", "==", contest_id)).stream()]
+        for i in range(0, len(refs), 400):
+            batch = db.batch()
+            for r in refs[i:i + 400]:
+                batch.delete(r)
+            batch.commit()
+
+    await asyncio.to_thread(_purge)
+
+    await manager.broadcast(contest_id, {"type": "CONTEST_DELETED"})
+    manager.contest_state.pop(contest_id, None)
+    manager.active_connections.pop(contest_id, None)
+    return {"success": True, "message": "Contest deleted"}
 
 @app.get("/contests/{contest_id}/info")
 def get_contest_info_by_id(contest_id: str):
     doc = db.collection("contests").document(contest_id).get()
     if not doc.exists:
         raise HTTPException(status_code=404, detail="Contest not found")
-        
-    data = doc.to_dict()
-    q_data = []
-    for cq in data.get("questions", []):
-        q_doc = db.collection("questions").document(cq["question_id"]).get()
-        if q_doc.exists:
-            q = q_doc.to_dict()
-            q_data.append({
-                "id": q_doc.id, 
-                "title": q.get("title"), 
-                "description": q.get("description"), 
-                "points": cq.get("points"), 
-                "time_limit": cq.get("time_limit")
-            })
-            
-    elapsed = 0
-    if data.get("start_time"):
-        try:
-            st = datetime.fromisoformat(data["start_time"].replace('Z', ''))
-            elapsed = (datetime.utcnow() - st).total_seconds()
-        except:
-            pass
-            
-    # Auto-end standard contest if time is up
-    if data.get("mode") == "standard" and data.get("status") == "active" and data.get("overall_time_limit"):
-        if elapsed >= data["overall_time_limit"] * 60:
-            doc.reference.update({"status": "ended"})
-            data["status"] = "ended"
-            asyncio.create_task(manager.broadcast(doc.id, {"type": "CONTEST_ENDED"}))
-
-    host_name = "Unknown"
-    if data.get("host_id"):
-        user_doc = db.collection("users").document(data.get("host_id")).get()
-        if user_doc.exists:
-            host_name = user_doc.to_dict().get("username", "Unknown")
-
-    return {
-        "id": doc.id,
-        "title": data.get("title"),
-        "mode": data.get("mode"),
-        "visibility": data.get("visibility", "public"),
-        "overall_time_limit": data.get("overall_time_limit"),
-        "penalty_per_wrong_answer": data.get("penalty_per_wrong_answer"),
-        "start_time": data.get("start_time"),
-        "scheduled_start_time": data.get("scheduled_start_time"),
-        "status": data.get("status"),
-        "server_elapsed_seconds": max(0, elapsed),
-        "evaluation_mode": data.get("evaluation_mode", "strict"),
-        "host_name": host_name,
-        "questions": q_data
-    }
+    return build_contest_payload(doc)
 
 @app.websocket("/ws/contest/{contest_id}")
 async def websocket_endpoint(websocket: WebSocket, contest_id: str):
@@ -595,22 +705,27 @@ async def submit_code(submission: CodeSubmission, current_user: dict = Depends(g
     if contest.get("status") == "waiting":
         return {"passed": False, "results": [], "error": "This contest has not started yet."}
 
+    if expire_contest_if_needed(contest_doc, contest):
+        return {"passed": False, "results": [], "error": "Time is up! The contest has ended."}
+
     if contest.get("status") != "active":
         return {"passed": False, "results": [], "error": "This contest has ended. Submissions are no longer accepted."}
 
-    elapsed = 0
-    if contest.get("start_time"):
-        try:
-            st = datetime.fromisoformat(contest["start_time"].replace('Z', ''))
-            elapsed = (datetime.utcnow() - st).total_seconds()
-        except:
-            pass
-            
-    if contest.get("mode") == "standard" and contest.get("overall_time_limit"):
-        if elapsed >= contest["overall_time_limit"] * 60:
-            contest_doc.reference.update({"status": "ended"})
-            asyncio.create_task(manager.broadcast(submission.contest_id, {"type": "CONTEST_ENDED"}))
-            return {"passed": False, "results": [], "error": "Time is up! The contest has ended."}
+    if current_user["id"] != contest.get("host_id"):
+        p_docs = db.collection("participants").where(filter=FieldFilter("contest_id", "==", submission.contest_id))\
+            .where(filter=FieldFilter("user_id", "==", current_user["id"])).limit(1).stream()
+        p_doc = next(p_docs, None)
+        if p_doc is None:
+            if contest.get("visibility", "public") == "private":
+                return {"passed": False, "results": [], "error": "This is a private contest. Request access from the host first."}
+            db.collection("participants").add({
+                "contest_id": submission.contest_id,
+                "user_id": current_user["id"],
+                "status": "accepted",
+                "joined_at": datetime.utcnow().isoformat()
+            })
+        elif p_doc.to_dict().get("status", "accepted") != "accepted":
+            return {"passed": False, "results": [], "error": "You are not an approved participant of this contest."}
 
     state = manager.get_state(submission.contest_id)
     if contest.get("mode") == "sudden_death" and state and state["state"] != "QUESTION_ACTIVE":
@@ -677,6 +792,8 @@ async def submit_code(submission: CodeSubmission, current_user: dict = Depends(g
         cqs = contest.get("questions", [])
         if state["current_q_idx"] < len(cqs) and cqs[state["current_q_idx"]]["question_id"] == submission.question_id:
             state["winner"] = current_user["username"]
+            # Flip synchronously so a concurrent winning submission can't also start a round timer.
+            state["state"] = "ROUND_OVER"
             await manager.set_state(submission.contest_id, state)
             asyncio.create_task(sudden_death_timer(submission.contest_id))
     
@@ -692,7 +809,8 @@ def join_contest(contest_id: str, current_user: dict = Depends(get_current_user)
         raise HTTPException(status_code=400, detail="Cannot join an ended contest")
         
     visibility = contest.get("visibility", "public")
-    participant_status = "pending" if visibility == "private" else "accepted"
+    is_host = contest.get("host_id") == current_user["id"]
+    participant_status = "pending" if (visibility == "private" and not is_host) else "accepted"
 
     existing = db.collection("participants").where(filter=FieldFilter("contest_id", "==", contest_id))\
         .where(filter=FieldFilter("user_id", "==", current_user["id"])).limit(1).stream()
@@ -728,13 +846,17 @@ def get_pending_participants(contest_id: str, current_user: dict = Depends(get_c
     
     pending = db.collection("participants").where(filter=FieldFilter("contest_id", "==", contest_id))\
         .where(filter=FieldFilter("status", "==", "pending")).stream()
-    
+
     users = []
     for p in pending:
-        u_id = p.to_dict().get("user_id")
+        p_data = p.to_dict()
+        u_id = p_data.get("user_id")
+        if u_id == current_user["id"]:
+            continue  # legacy rows: the host was once queued for their own contest
         u_doc = db.collection("users").document(u_id).get()
         if u_doc.exists:
-            users.append({"id": u_id, "username": u_doc.to_dict().get("username"), "doc_id": p.id})
+            users.append({"id": u_id, "username": u_doc.to_dict().get("username"), "doc_id": p.id, "requested_at": p_data.get("joined_at")})
+    users.sort(key=lambda u: u.get("requested_at") or "")
     return users
 
 @app.post("/contests/{contest_id}/accept/{user_id}")
@@ -908,23 +1030,26 @@ def get_my_solved(contest_id: str, current_user: dict = Depends(get_current_user
     return {"solved_question_ids": list(set(s.to_dict().get("question_id") for s in solved))}
 
 # Dashboard specific routes
+def contest_summary(doc, host_name: str) -> dict:
+    d = doc.to_dict()
+    expire_contest_if_needed(doc, d)
+    return {
+        "id": doc.id,
+        "title": d.get("title"),
+        "status": d.get("status"),
+        "end_reason": d.get("end_reason"),
+        "link_code": d.get("link_code"),
+        "mode": d.get("mode"),
+        "visibility": d.get("visibility", "public"),
+        "start_time": d.get("start_time"),
+        "created_at": d.get("created_at"),
+        "host_name": host_name,
+    }
+
 @app.get("/user/contests/hosted")
 def get_hosted_contests(current_user: dict = Depends(get_current_user)):
     contests = db.collection("contests").where(filter=FieldFilter("host_id", "==", current_user["id"])).stream()
-    res = []
-    for c in contests:
-        d = c.to_dict()
-        status = d.get("status")
-        if status == "active" and d.get("mode") in ["standard", "timed"] and d.get("overall_time_limit") and d.get("start_time"):
-            try:
-                st = datetime.fromisoformat(d["start_time"].replace('Z', ''))
-                if (datetime.utcnow() - st).total_seconds() >= d["overall_time_limit"] * 60:
-                    status = "ended"
-                    c.reference.update({"status": "ended"})
-            except:
-                pass
-        res.append({"id": c.id, "title": d.get("title"), "status": status, "link_code": d.get("link_code"), "mode": d.get("mode"), "start_time": d.get("start_time"), "host_name": current_user["username"]})
-    return res
+    return [contest_summary(c, current_user["username"]) for c in contests]
 
 @app.get("/user/contests/participated")
 def get_participated_contests(current_user: dict = Depends(get_current_user)):
@@ -939,25 +1064,10 @@ def get_participated_contests(current_user: dict = Depends(get_current_user)):
             valid_docs.append(c)
             host_ids.add(c.to_dict().get("host_id", ""))
     
-    hosts = {}
-    for hid in host_ids:
-        if hid:
-            u = db.collection("users").document(hid).get()
-            if u.exists:
-                hosts[hid] = u.to_dict().get("username", "Unknown")
-                
+    hosts = {hid: username_of(hid) for hid in host_ids if hid}
+
     for c in valid_docs:
-        d = c.to_dict()
-        status = d.get("status")
-        if status == "active" and d.get("mode") in ["standard", "timed"] and d.get("overall_time_limit") and d.get("start_time"):
-            try:
-                st = datetime.fromisoformat(d["start_time"].replace('Z', ''))
-                if (datetime.utcnow() - st).total_seconds() >= d["overall_time_limit"] * 60:
-                    status = "ended"
-                    c.reference.update({"status": "ended"})
-            except:
-                pass
-        res.append({"id": c.id, "title": d.get("title"), "status": status, "link_code": d.get("link_code"), "mode": d.get("mode"), "start_time": d.get("start_time"), "host_name": hosts.get(d.get("host_id", ""), "Unknown")})
+        res.append(contest_summary(c, hosts.get(c.to_dict().get("host_id", ""), "Unknown")))
     return res
 
 

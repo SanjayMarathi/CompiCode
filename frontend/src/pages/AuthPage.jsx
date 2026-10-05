@@ -2,15 +2,19 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { API_URL, setAuthToken } from '../config';
+import Icon from '../components/Icon';
+import Logo from '../components/Logo';
 
 export default function AuthPage({ onLogin }) {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitting(true);
     try {
       if (isLogin) {
         const formData = new URLSearchParams();
@@ -32,41 +36,39 @@ export default function AuthPage({ onLogin }) {
     } catch (err) {
       const msg = err.response?.data?.detail || err.message || 'Cannot connect to server. Make sure the backend is running.';
       alert(msg);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <div style={{ position: 'relative', minHeight: 'calc(100vh - 60px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div className="container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', zIndex: 1, width: '100%' }}>
-        {/* Auth Card */}
-        <div className="glass-panel fade-in-up" style={{ width: '100%', maxWidth: '420px', position: 'relative', boxShadow: 'var(--shadow-lg)' }}>
-          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-            <Link to="/" style={{ textDecoration: 'none', display: 'inline-block', marginBottom: '1rem' }}>
-              <div style={{ fontSize: '1.8rem', letterSpacing: '-0.03em', fontFamily: 'Inter, sans-serif' }}>
-                <span className="text-orange">Compi</span><span className="text-white">Code</span>
-              </div>
-            </Link>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{isLogin ? 'Welcome Back' : 'Join the Arena'}</h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.25rem' }}>{isLogin ? 'Sign in to continue to CompiCode' : 'Create your account to start competing'}</p>
+    <div className="center-screen" style={{ paddingTop: '4rem' }}>
+      <div className="bcard fade-in-up" style={{ width: '100%', maxWidth: 440, textAlign: 'left', padding: '2.8rem 2rem 2rem' }}>
+        <span className="bubble"><Icon name={isLogin ? 'key' : 'user'} size={26} /></span>
+        <Link to="/" style={{ display: 'inline-block', marginBottom: '1rem' }} aria-label="CompiCode home">
+          <Logo size="1.6rem" />
+        </Link>
+        <h2 style={{ fontSize: '1.9rem', marginBottom: '0.15rem' }}>{isLogin ? 'Welcome back' : 'Join the arena'}</h2>
+        <p className="muted" style={{ fontSize: '0.9rem', marginBottom: '1.5rem' }}>{isLogin ? 'Sign in to continue to CompiCode.' : 'Create an account to start competing.'}</p>
+
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label htmlFor="username">Username</label>
+            <input id="username" className="form-input" required autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="your_handle" />
           </div>
-          
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label style={{ color: 'var(--text-primary)' }}>Username</label>
-              <input className="form-input" required value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Enter your username" />
-            </div>
-            <div className="form-group">
-              <label style={{ color: 'var(--text-primary)' }}>Password</label>
-              <input className="form-input" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" />
-            </div>
-            <button className="btn btn-primary" style={{ width: '100%', marginTop: '1.5rem', padding: '0.8rem', fontSize: '1rem', fontWeight: 600 }}>{isLogin ? 'Sign In' : 'Create Account'}</button>
-          </form>
-          
-          <div style={{ marginTop: '1.5rem', textAlign: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
-            <a href="#" onClick={(e) => { e.preventDefault(); setIsLogin(!isLogin); }} style={{ color: 'var(--primary)', fontSize: '0.95rem', transition: 'color 0.2s', fontWeight: 500, textDecoration: 'none' }}>
-              {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-            </a>
+          <div className="form-group">
+            <label htmlFor="password">Password</label>
+            <input id="password" className="form-input" type="password" required autoComplete={isLogin ? 'current-password' : 'new-password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
           </div>
+          <button className="btn btn-primary btn-block" disabled={submitting} style={{ marginTop: '0.5rem', padding: '0.8rem' }}>
+            {submitting ? 'Please wait…' : isLogin ? 'Sign in' : 'Create account'}
+          </button>
+        </form>
+
+        <div style={{ marginTop: '1.5rem', textAlign: 'center', borderTop: '1.5px solid var(--border-color)', paddingTop: '1.25rem' }}>
+          <button type="button" className="btn btn-ghost btn-sm" style={{ border: 'none', textTransform: 'none', letterSpacing: 0, fontFamily: 'var(--font-body)', fontSize: '0.92rem' }} onClick={() => setIsLogin(!isLogin)}>
+            {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+          </button>
         </div>
       </div>
     </div>

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, Navigate, NavLink } from 'react-router-dom';
 import axios from 'axios';
 import { API_URL, setAuthToken } from './config';
 
 import AuthRequired from './components/AuthRequired';
 import Footer from './components/Footer';
 import BackgroundAnimations from './components/BackgroundAnimations';
+import Icon from './components/Icon';
+import Logo from './components/Logo';
 
 import LandingPage from './pages/LandingPage';
 import AuthPage from './pages/AuthPage';
@@ -16,11 +18,10 @@ import ContestLayout from './pages/ContestLayout';
 import SolvePlatform from './pages/SolvePlatform';
 import NotFound from './pages/NotFound';
 
-import './App.css';
-
 export default function App() {
   const [user, setUser] = useState(null);
-  const [isInitializing, setIsInitializing] = useState(true);
+  // Only wait on /me when there is a saved session to restore.
+  const [isInitializing, setIsInitializing] = useState(() => !!localStorage.getItem('token'));
   const [alertConfig, setAlertConfig] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
 
@@ -37,7 +38,7 @@ export default function App() {
 
   useEffect(() => {
     window.alert = (message) => {
-      setAlertConfig({ message, title: 'Notification' });
+      setAlertConfig({ message, title: 'Notice' });
     };
 
     const token = localStorage.getItem('token');
@@ -51,8 +52,6 @@ export default function App() {
         setAuthToken(null);
         setIsInitializing(false);
       });
-    } else {
-      setIsInitializing(false);
     }
   }, []);
 
@@ -64,9 +63,9 @@ export default function App() {
 
   if (isInitializing) {
     return (
-      <div className="container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-        <div style={{ marginBottom: '1.5rem', width: '50px', height: '50px', border: '3px solid var(--border-color)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }}></div>
-        <p className="pulse-text" style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Loading...</p>
+      <div className="center-screen">
+        <div className="spinner" />
+        <p className="eyebrow pulse-text" style={{ marginTop: '1rem' }}>Loading</p>
       </div>
     );
   }
@@ -75,32 +74,39 @@ export default function App() {
     <Router>
       <BackgroundAnimations />
       <nav className="navbar">
-        <Link to="/" style={{ textDecoration: 'none' }}>
-          <div style={{ fontSize: '1.4rem', letterSpacing: '-0.03em', fontFamily: 'Inter, sans-serif' }}>
-            <span className="text-orange">Compi</span><span className="text-white">Code</span>
-          </div>
+        <Link to="/" className="brand" aria-label="CompiCode home">
+          <Logo />
         </Link>
         <div className="nav-links">
-          <button className="theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
-            <span className="toggle-icon sun-icon">☀️</span>
-            <span className="toggle-icon moon-icon">🌙</span>
+          {user && (
+            <>
+              <NavLink to="/dashboard" className="btn btn-ghost btn-sm nav-text-link" style={{ border: 'none' }}>Dashboard</NavLink>
+              {user.is_admin && <NavLink to="/admin" className="btn btn-ghost btn-sm nav-text-link" style={{ border: 'none' }}>Problem Bank</NavLink>}
+            </>
+          )}
+          <button className="theme-toggle" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+            <span className="ti sun-icon"><Icon name="sun" size={15} stroke={2} /></span>
+            <span className="ti moon-icon"><Icon name="moon" size={15} stroke={2} /></span>
           </button>
           {user ? (
             <>
-              {user.is_admin && <span className="badge" style={{ marginRight: '0.5rem' }}>Admin</span>}
-              <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Welcome, <strong style={{ color: 'var(--text-primary)' }}>{user.username}</strong></span>
-              <button className="btn btn-secondary" onClick={logout} style={{ padding: '0.4rem 1rem', fontSize: '0.8rem' }}>Log Out</button>
+              <span className="user-chip">
+                <span className="avatar">{user.username.charAt(0)}</span>
+                <span className="uname">{user.username}</span>
+                {user.is_admin && <span className="badge badge-solid">Admin</span>}
+              </span>
+              <button className="btn btn-secondary btn-sm" onClick={logout} aria-label="Log out"><Icon name="logout" size={16} /><span className="lbl">Log out</span></button>
             </>
           ) : (
-            <Link to="/auth" className="btn btn-primary" style={{ padding: '0.4rem 1.5rem' }}>Sign In</Link>
+            <Link to="/auth" className="btn btn-primary btn-sm">Sign in</Link>
           )}
         </div>
       </nav>
-      
+
       <Routes>
         <Route path="/auth" element={user ? <Navigate to="/dashboard" /> : <AuthPage onLogin={setUser}/>} />
-        <Route path="/" element={user ? <Dashboard /> : <LandingPage user={user} />} />
-        <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/auth" />} />
+        <Route path="/" element={user ? <Dashboard user={user} /> : <LandingPage user={user} />} />
+        <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/auth" />} />
         <Route path="/host" element={user ? <HostPanel /> : <Navigate to="/auth" />} />
         <Route path="/admin" element={user ? (user.is_admin ? <SysAdminPanel /> : <Navigate to="/dashboard" />) : <Navigate to="/auth" />} />
         <Route path="/sysadmin/problemset" element={user ? (user.is_admin ? <SysAdminPanel /> : <Navigate to="/dashboard" />) : <Navigate to="/auth" />} />
@@ -111,16 +117,12 @@ export default function App() {
       <Footer />
 
       {alertConfig && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--overlay-bg)', backdropFilter: 'blur(8px)' }}>
-          <div className="fade-in-scale" style={{ background: 'var(--modal-bg)', border: '1px solid var(--border-color)', borderRadius: '14px', width: '90%', maxWidth: '400px', boxShadow: 'var(--shadow-lg)', overflow: 'hidden' }}>
-            <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-color)' }}>
-              <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{alertConfig.title}</h3>
-            </div>
-            <div style={{ padding: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.6' }}>
-              {alertConfig.message}
-            </div>
-            <div style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'flex-end', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border-color)' }}>
-              <button className="btn btn-primary" onClick={() => setAlertConfig(null)} style={{ padding: '0.4rem 1.5rem' }}>OK</button>
+        <div className="modal-overlay" style={{ zIndex: 99999 }} onMouseDown={(e) => { if (e.target === e.currentTarget) setAlertConfig(null); }}>
+          <div className="modal" role="alertdialog" aria-modal="true">
+            <div className="modal-head"><h3>{alertConfig.title}</h3></div>
+            <div className="modal-body">{String(alertConfig.message)}</div>
+            <div className="modal-foot">
+              <button className="btn btn-primary btn-sm" autoFocus onClick={() => setAlertConfig(null)}>OK</button>
             </div>
           </div>
         </div>
