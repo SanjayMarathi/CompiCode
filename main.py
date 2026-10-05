@@ -26,6 +26,7 @@ pwd_context = CryptContext(schemes=["bcrypt_sha256", "bcrypt"], deprecated="auto
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 SWEEP_INTERVAL_SECONDS = 30
+MAX_CODE_CHARS = 100_000  # stored with every submission; keeps documents far below Firestore's 1 MiB limit
 MAIN_LOOP: Optional[asyncio.AbstractEventLoop] = None
 
 
@@ -694,6 +695,9 @@ async def submit_code(submission: CodeSubmission, current_user: dict = Depends(g
         raise HTTPException(status_code=404, detail="Contest not found")
     contest = contest_doc.to_dict()
 
+    if len(submission.code) > MAX_CODE_CHARS:
+        return {"passed": False, "results": [], "error": f"Code is too long (limit {MAX_CODE_CHARS:,} characters)."}
+
     already_passed = db.collection("submissions").where(filter=FieldFilter("contest_id", "==", submission.contest_id))\
         .where(filter=FieldFilter("user_id", "==", current_user["id"]))\
         .where(filter=FieldFilter("question_id", "==", submission.question_id))\
@@ -777,14 +781,19 @@ async def submit_code(submission: CodeSubmission, current_user: dict = Depends(g
         except:
             pass
             
+    verdict = "accepted" if passed_all else ("error" if any(r.get("error") for r in eval_results) else "wrong_answer")
     db.collection("submissions").add({
         "user_id": current_user["id"],
         "question_id": submission.question_id,
         "contest_id": submission.contest_id,
         "passed": passed_all,
+        "verdict": verdict,
         "testcases_passed": sum(1 for r in eval_results if r.get("passed", False)),
+        "total_testcases": len(eval_results),
         "penalty_incurred": 0 if passed_all else contest.get("penalty_per_wrong_answer", 5),
         "time_taken": time_taken,
+        "language": submission.language,
+        "code": submission.code,
         "timestamp": datetime.utcnow().isoformat()
     })
     
@@ -1028,6 +1037,61 @@ def get_my_solved(contest_id: str, current_user: dict = Depends(get_current_user
         .where(filter=FieldFilter("user_id", "==", current_user["id"]))\
         .where(filter=FieldFilter("passed", "==", True)).stream()
     return {"solved_question_ids": list(set(s.to_dict().get("question_id") for s in solved))}
+
+def _question_title(question_id: str) -> str:
+    def _load():
+        q = db.collection("questions").document(question_id).get()
+        return q.to_dict().get("title", "Untitled") if q.exists else "Deleted problem"
+    return cached(f"qtitle:{question_id}", 120, _load)
+
+def _submission_row(snap) -> dict:
+    d = snap.to_dict()
+    passed = bool(d.get("passed", False))
+    return {
+        "id": snap.id,
+        "user_id": d.get("user_id"),
+        "username": username_of(d.get("user_id")),
+        "question_id": d.get("question_id"),
+        "question_title": _question_title(d.get("question_id")),
+        "passed": passed,
+        "verdict": d.get("verdict") or ("accepted" if passed else "wrong_answer"),
+        "testcases_passed": d.get("testcases_passed", 0),
+        "total_testcases": d.get("total_testcases"),
+        "language": d.get("language"),
+        "time_taken": d.get("time_taken", 0),
+        "timestamp": d.get("timestamp"),
+        "has_code": bool(d.get("code")),
+    }
+
+@app.get("/contests/{contest_id}/submissions")
+def list_contest_submissions(
+    contest_id: str,
+    user_id: Optional[str] = None,
+    question_id: Optional[str] = None,
+    limit: int = 300,
+    current_user: dict = Depends(get_current_user),
+):
+    """Host only: every submission in the contest, newest first (without the code)."""
+    require_host_contest(contest_id, current_user)
+    query = db.collection("submissions").where(filter=FieldFilter("contest_id", "==", contest_id))
+    if user_id:
+        query = query.where(filter=FieldFilter("user_id", "==", user_id))
+    if question_id:
+        query = query.where(filter=FieldFilter("question_id", "==", question_id))
+    snaps = sorted(query.stream(), key=lambda x: x.to_dict().get("timestamp") or "", reverse=True)
+    limit = max(1, min(limit, 500))
+    return {"total": len(snaps), "submissions": [_submission_row(x) for x in snaps[:limit]]}
+
+@app.get("/contests/{contest_id}/submissions/{submission_id}")
+def get_contest_submission(contest_id: str, submission_id: str, current_user: dict = Depends(get_current_user)):
+    """Host only: one submission including the code the participant wrote."""
+    require_host_contest(contest_id, current_user)
+    snap = db.collection("submissions").document(submission_id).get()
+    if not snap.exists or snap.to_dict().get("contest_id") != contest_id:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    row = _submission_row(snap)
+    row["code"] = snap.to_dict().get("code")
+    return row
 
 # Dashboard specific routes
 def contest_summary(doc, host_name: str) -> dict:

@@ -11,11 +11,11 @@ short_description: Real-time competitive programming arena
 
 <div align="center">
 
-<img src="docs/logo.png" alt="CompiCode" width="340" />
+<img src="docs/logo.png" alt="CompiCode" width="320" />
 
 ### A real-time competitive programming arena
 
-Host or join live coding contests, get judged automatically, and watch the standings move as people pass testcases.
+Host or join live coding contests, get judged automatically, review what everyone wrote, and watch the standings move as people pass testcases.
 
 [![React](https://img.shields.io/badge/React-19-18e6d3?style=flat-square&logo=react&logoColor=082640)](https://react.dev)
 [![Vite](https://img.shields.io/badge/Vite-8-18e6d3?style=flat-square&logo=vite&logoColor=082640)](https://vitejs.dev)
@@ -27,10 +27,7 @@ Host or join live coding contests, get judged automatically, and watch the stand
 
 </div>
 
-<picture>
-  <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/landing-light.png">
-  <img src="docs/screenshots/landing-dark.png" alt="CompiCode Arena landing page" />
-</picture>
+<img src="docs/screenshots/landing-light.png" alt="CompiCode Arena landing page" />
 
 ---
 
@@ -39,6 +36,7 @@ Host or join live coding contests, get judged automatically, and watch the stand
 - [Features](#features)
 - [Screenshots](#screenshots)
 - [How a contest works](#how-a-contest-works)
+- [Scoring, penalties and time limits](#scoring-penalties-and-time-limits)
 - [Architecture](#architecture)
 - [Tech stack](#tech-stack)
 - [Project structure](#project-structure)
@@ -65,10 +63,11 @@ Host or join live coding contests, get judged automatically, and watch the stand
 ### Hosting and moderation
 
 - **Public or private contests.** Private contests put every join request in a **host approval queue** (accept, decline, or accept all), and it keeps working while the contest is live.
+- **Review participants' code.** The host gets a **Submissions** tab with every attempt, filterable by person and by problem. Open any submission in a read-only code viewer, or click a name in the standings to jump straight to that person's attempts. It updates live while the contest runs, and keeps working after it ends. Participants are told on the solve page that the host can read their code.
 - **Access by code or link.** Every contest gets a short access code and a one-click invite link.
 - **Scheduled starts.** Set a start time and the lobby counts down for everyone.
 - **Kick participants** (their submissions are removed) and **delete your own contests** (type the title to confirm). People inside a deleted contest are told and sent back to the dashboard.
-- **Problem bank.** Pull problems from a global bank (managed by admins) or write your own with a built-in sandbox that runs your reference solution against your testcases before you publish.
+- **Problem bank.** Pull problems from a global bank (managed from the admin panel) or write your own with a built-in sandbox that runs your reference solution against your testcases before you publish.
 
 ### Judging and standings
 
@@ -84,7 +83,7 @@ Contest time is decided by the **server's wall clock**, never by a browser. A ba
 ### Interface
 
 - **Two themes:** sky blue + white, and sky blue + black, switchable from the navbar and remembered per browser.
-- Realistic product screens (editor, standings, verdicts, lobby) drift quietly behind every page.
+- Realistic product screens (editor, standings, verdicts, lobby) drift quietly behind every page in a blue and orange glow.
 - Fully responsive down to phone width.
 
 ---
@@ -93,24 +92,41 @@ Contest time is decided by the **server's wall clock**, never by a browser. A ba
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/dashboard-dark.png" alt="Dashboard" /><br /><sub><b>Dashboard</b>: join with a code, host a contest, search your history, delete what you host.</sub></td>
-    <td width="50%"><img src="docs/screenshots/create-contest-light.png" alt="Create contest" /><br /><sub><b>Create a contest</b>: mode and visibility pickers, limits, scheduling and problems.</sub></td>
+    <td width="50%"><img src="docs/screenshots/dashboard-light.png" alt="Dashboard" /><br /><sub><b>Dashboard</b>: join with a code, host a contest, search your history, delete what you host.</sub></td>
+    <td width="50%"><img src="docs/screenshots/create-contest-light.png" alt="Create contest" /><br /><sub><b>Create a contest</b>: mode and visibility pickers, time limit, wrong-answer penalty, scheduling and problems.</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/lobby-host-requests.png" alt="Host lobby with join requests" /><br /><sub><b>Host lobby</b>: approve or decline join requests before (or during) the contest.</sub></td>
     <td width="50%"><img src="docs/screenshots/contest-live-standings.png" alt="Live contest and standings" /><br /><sub><b>Live contest</b>: problem list, countdown and Codeforces-style standings.</sub></td>
   </tr>
   <tr>
+    <td width="50%"><img src="docs/screenshots/host-submissions.png" alt="Host submissions tab" /><br /><sub><b>Host review</b>: every attempt with verdict, language, tests passed and when it happened.</sub></td>
+    <td width="50%"><img src="docs/screenshots/host-code-viewer.png" alt="Read-only code viewer" /><br /><sub><b>Code viewer</b>: read exactly what a participant submitted, with syntax highlighting.</sub></td>
+  </tr>
+  <tr>
     <td width="50%"><img src="docs/screenshots/solve-accepted.png" alt="Accepted verdict" /><br /><sub><b>Accepted</b>: every testcase passed, per-case detail one click away.</sub></td>
-    <td width="50%"><img src="docs/screenshots/solve-wrong-answer-light.png" alt="Wrong answer verdict" /><br /><sub><b>Wrong answer</b> (light theme): hidden cases are locked, visible ones show input, expected and actual output.</sub></td>
+    <td width="50%"><img src="docs/screenshots/solve-wrong-answer-light.png" alt="Wrong answer verdict" /><br /><sub><b>Wrong answer</b>: hidden cases are locked, visible ones show input, expected and actual output.</sub></td>
   </tr>
 </table>
+
+### On a phone
 
 <p align="center">
   <img src="docs/screenshots/mobile-dashboard.png" alt="Mobile dashboard" width="260" />
   &nbsp;&nbsp;&nbsp;
   <img src="docs/screenshots/mobile-landing.png" alt="Mobile landing page" width="260" />
 </p>
+
+### Dark theme
+
+The same interface in sky blue + black.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/landing-dark.png" alt="Landing page, dark theme" /></td>
+    <td width="50%"><img src="docs/screenshots/dashboard-dark.png" alt="Dashboard, dark theme" /></td>
+  </tr>
+</table>
 
 ---
 
@@ -129,7 +145,7 @@ stateDiagram-v2
     ended --> [*]: host deletes
 ```
 
-**Time-up rule.** Once a contest is `active` for longer than its `overall_time_limit` minutes it is over, in every mode. The rule is enforced three ways, so a contest can never keep running by accident:
+**Time-up rule.** Once a contest is `active` for longer than its time limit it is over, in every mode. The rule is enforced three ways, so a contest can never keep running by accident:
 
 1. **Lazily**, on every contest lookup, dashboard list and submission.
 2. **Eagerly**, by a background sweeper that checks active contests every 30 seconds.
@@ -140,10 +156,41 @@ The reason is stored as `end_reason`: `time_up`, `host` or `completed`.
 **Access control** is enforced on the server, not just in the UI:
 
 - Only the host can start, open, end or delete a contest.
+- Only the host can list submissions or read a participant's code.
 - On a private contest, a user who is pending, rejected or unknown cannot submit.
 - The host never appears in their own approval queue.
 
-**Scoring.** The leaderboard supports two evaluation modes. In `strict` mode (the default the UI creates) a problem scores its points only when every testcase passes. In `partial` mode points scale with the testcases passed. Ties are broken by total time, then testcases passed, then penalty.
+---
+
+## Scoring, penalties and time limits
+
+### Time limits
+
+There are three different clocks:
+
+| Limit | Where you set it | Applies to | What happens at zero |
+|---|---|---|---|
+| **Contest time limit** | Contest form, in minutes (1 to 480, default 60) | The whole contest, every mode | The contest ends for everyone and standings lock. |
+| **Problem time limit** | Problem editor, in seconds (minimum 30, default 300) | **Timed mode**, one limit **per problem** | The participant's current code is auto-submitted and that problem locks for them. |
+| **Execution limit** | The judge | Every run of a submission | A run that exceeds it fails. The reference executor (`executor.py`) allows Python 2 s, C++ 2 s (after a 5 s compile) and Java 3 s (after a 5 s compile). |
+
+In **Timed** mode a problem's countdown starts when a participant first opens it, and the contest limit still applies on top: if it runs out first, the contest ends. In **Standard** and **Sudden Death** the per-problem limit is not used (Sudden Death rounds end when somebody solves the problem, and the contest limit is the match clock).
+
+In Timed mode each problem's limit is shown next to it in the host's problem list and in the contest's problem list.
+
+### Wrong-answer penalty
+
+Set per contest in the form (default **5**, use **0** to turn it off).
+
+- Every submission that does not pass all testcases (wrong answer, runtime error or compile error) adds the penalty to that participant's total.
+- Once a problem is solved it accepts no further submissions, so a solved problem never collects more penalty.
+- Submissions that were never judged cost nothing: the contest not running, an unapproved participant, or the judge being unreachable.
+- The standings show the total under the finish time (for example `+10 pen`) and the wrong attempts per problem (for example `+2 fails`).
+- Penalty is the **final tie-breaker**. It does not subtract from the score.
+
+### Points and ranking
+
+Each problem has its own points (default 10). Two evaluation modes exist in the API: `strict`, which the contest form uses, awards a problem's points only when every testcase passes, and `partial` scales the points by the testcases passed. Participants are ranked by score, then total time, then testcases passed, then penalty.
 
 ---
 
@@ -175,6 +222,7 @@ flowchart LR
 
 - The **frontend** is a single-page app. In production FastAPI serves the built files from `frontend/dist`, so the whole product runs as one container on one port.
 - The **judge** is a separate service: the API posts `{code, language, test_cases}` to the executor Space's `/evaluate` endpoint and gets per-testcase results back. `executor.py` in this repo holds the execution helpers (Python, C++, Java, with timeouts) used by that service.
+- Every judged submission is stored with its **source code, language and verdict**, which is what the host's review tab reads. Code is capped at 100,000 characters.
 - **Sudden Death** rounds are driven by in-process timers and pushed to clients over the WebSocket. When the match finishes, the result is written to Firestore.
 
 ---
@@ -197,7 +245,7 @@ flowchart LR
 
 ```text
 .
-├── main.py                 # FastAPI app: auth, contests, judging, leaderboard, WebSocket, sweeper
+├── main.py                 # FastAPI app: auth, contests, judging, review, leaderboard, WebSocket, sweeper
 ├── database.py             # Firestore client (FIREBASE_KEY_JSON env var or firebase-key.json)
 ├── executor.py             # Execution helpers for the standalone executor service
 ├── contest_manager.py      # Early in-memory contest manager (not used by the API)
@@ -213,7 +261,8 @@ flowchart LR
         ├── index.css       # Design tokens (light + dark) and every component style
         ├── config.js       # API/WS URLs, mode metadata, time helpers
         ├── monacoTheme.js  # Editor themes that follow the app theme
-        ├── components/     # Logo, Icon, ConfirmModal, StatusPill, Standings, Background mocks
+        ├── components/     # Logo, Icon, ConfirmModal, StatusPill, Standings,
+        │                   #   SubmissionsPanel, CodeViewModal, Background mocks
         └── pages/          # Landing, Auth, Dashboard, HostPanel, ContestLayout,
                             #   SolvePlatform, SysAdminPanel, NotFound
 ```
@@ -326,11 +375,13 @@ Most routes require `Authorization: Bearer <token>`. Registration, login, the co
 | `POST` | `/contests/{id}/reject/{user_id}` | Host: decline a request |
 | `DELETE` | `/contests/{id}/kick/{user_id}` | Host: remove a participant and their submissions |
 
-**Judging and realtime**
+**Judging, review and realtime**
 
 | Method | Route | Description |
 |---|---|---|
-| `POST` | `/submit` | Judge a submission (checks time, participation and prior solves) |
+| `POST` | `/submit` | Judge a submission (checks time, participation, prior solves and code length) |
+| `GET` | `/contests/{id}/submissions` | **Host only:** every submission, newest first, without the code. Optional `user_id`, `question_id` and `limit` (max 500) |
+| `GET` | `/contests/{id}/submissions/{submission_id}` | **Host only:** one submission including its source code |
 | `WS` | `/ws/contest/{id}` | Pushes `SYNC_STATE`, `TIMER_TICK`, `CONTEST_ENDED`, `CONTEST_DELETED`, `KICK_USER` |
 
 Interactive docs are available at `/docs` while the backend is running.
@@ -347,7 +398,9 @@ Firestore collections:
 | `questions` | `title`, `description`, `is_global`, `creator_id`, `test_cases[{input_data, expected_output}]` |
 | `contests` | `title`, `mode`, `visibility`, `evaluation_mode`, `host_id`, `link_code`, `status` (`waiting`, `active`, `ended`), `end_reason`, `overall_time_limit`, `penalty_per_wrong_answer`, `start_time`, `scheduled_start_time`, `created_at`, `questions[{question_id, points, time_limit}]` |
 | `participants` | `contest_id`, `user_id`, `status` (`pending`, `accepted`, `rejected`), `joined_at` |
-| `submissions` | `contest_id`, `user_id`, `question_id`, `passed`, `testcases_passed`, `penalty_incurred`, `time_taken`, `timestamp` |
+| `submissions` | `contest_id`, `user_id`, `question_id`, `passed`, `verdict` (`accepted`, `wrong_answer`, `error`), `testcases_passed`, `total_testcases`, `penalty_incurred`, `time_taken`, `language`, `code`, `timestamp` |
+
+Submissions made before code logging was added have no `code`; the host viewer says so instead of showing an empty editor.
 
 ---
 
@@ -369,9 +422,9 @@ The look is a sky-blue accent on white (light) or black (dark), with navy text, 
 
 - Every colour is a CSS variable in `frontend/src/index.css`; the light and dark themes are two token blocks.
 - The accent (`#18e6d3`) is used for fills, rings and highlights; navy sits on top of it for contrast.
-- Orange is reserved for the logo, favicon and the background mockups.
+- The logo is a two-tone wordmark: sky-blue **Compi** and orange **Code**. Orange is otherwise reserved for the favicon and the background mockups.
 - Headings use Rokkitt (slab serif, uppercase), body text Quicksand, code and timers JetBrains Mono.
-- The Monaco editor ships matching light and dark themes.
+- The Monaco editor ships matching light and dark themes with blue keywords and orange strings.
 
 ---
 
@@ -380,4 +433,5 @@ The look is a sky-blue accent on white (light) or black (dark), with navy text, 
 - Server-enforced per-problem timers for Timed mode (today they run in the browser).
 - Server-side scheduled starts (today the host's open tab triggers the start).
 - A scoring toggle in the contest form to expose `partial` evaluation.
+- Let participants revisit their own past submissions.
 - Persist Sudden Death round state so a server restart mid-match can resume.

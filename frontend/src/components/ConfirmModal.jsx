@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Icon from './Icon';
 
 /**
@@ -33,7 +34,7 @@ function ConfirmDialog({
   const locked = requireText ? typed.trim() !== requireText.trim() : false;
   const danger = tone === 'danger';
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onCancel(); }}>
       <div className="modal" role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-head">
@@ -63,6 +64,7 @@ function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -9,7 +9,7 @@ const formatTimeStr = (totalSeconds) => {
   return `${h}:${m}:${s}`;
 };
 
-export default function CodeforcesStandings({ leaderboard, questions, title, isHost, onKick, mode, meId }) {
+export default function CodeforcesStandings({ leaderboard, questions, title, isHost, onKick, onInspect, mode, meId }) {
   const [searchQuery, setSearchQuery] = useState('');
 
   const showQuestionCols = mode !== 'sudden_death';
@@ -52,7 +52,13 @@ export default function CodeforcesStandings({ leaderboard, questions, title, isH
             ) : rows.map(({ l, rank }) => (
               <tr key={l.user_id || rank} className={meId && l.user_id === meId ? 'is-me' : ''}>
                 <td><span className={`rank ${rank <= 3 ? `top r${rank}` : ''}`}>{rank}</span></td>
-                <td className="left"><strong style={{ fontSize: '0.95rem' }}>{l.username}</strong></td>
+                <td className="left">
+                  {onInspect ? (
+                    <button className="name-link" onClick={() => onInspect(l.user_id)} title={`View ${l.username}'s submissions`}>{l.username}</button>
+                  ) : (
+                    <strong style={{ fontSize: '0.95rem' }}>{l.username}</strong>
+                  )}
+                </td>
                 <td>
                   <span className="num-strong">{l.score || 0}</span> <span className="num-sub">/ {l.total_points || 0}</span>
                 </td>

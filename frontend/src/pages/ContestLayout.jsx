@@ -5,6 +5,7 @@ import { API_URL, WS_URL, MODE_META, END_REASON_TEXT, formatTime, formatPenalty,
 import CodeforcesStandings from '../components/CodeforcesStandings';
 import ConfirmModal from '../components/ConfirmModal';
 import StatusPill from '../components/StatusPill';
+import SubmissionsPanel from '../components/SubmissionsPanel';
 import Icon from '../components/Icon';
 
 const letter = (i) => String.fromCharCode(65 + (i % 26));
@@ -82,6 +83,8 @@ export default function ContestLayout({ userObj }) {
   const [dialog, setDialog] = useState(null); // 'end' | 'delete' | { kick: {id, name} }
   const [dialogBusy, setDialogBusy] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [hostTab, setHostTab] = useState('standings'); // host only: 'standings' | 'submissions'
+  const [inspectUser, setInspectUser] = useState('');
 
   const goneRef = useRef(false); // set once we are leaving because the contest was deleted
   const startingRef = useRef(false);
@@ -418,10 +421,35 @@ export default function ContestLayout({ userObj }) {
     </header>
   );
 
+  const canReview = isHost && contest.status !== 'waiting';
+  const standingsTitle = contest.status === 'ended' ? 'Final standings' : 'Standings';
   const standings = (
     <section className="panel fade-in-up stagger-2">
-      <div className="panel-head"><h3>{contest.status === 'ended' ? 'Final standings' : 'Standings'}</h3></div>
-      <CodeforcesStandings leaderboard={leaderboard} questions={contest.questions} mode={contest.mode} isHost={isHost} onKick={(id, name) => setDialog({ kick: { id, name } })} meId={userObj?.id} />
+      <div className="panel-head">
+        {canReview ? (
+          <div className="tabs" role="tablist">
+            <button role="tab" aria-selected={hostTab === 'standings'} className={`tab ${hostTab === 'standings' ? 'is-on' : ''}`} onClick={() => setHostTab('standings')}>{standingsTitle}</button>
+            <button role="tab" aria-selected={hostTab === 'submissions'} className={`tab ${hostTab === 'submissions' ? 'is-on' : ''}`} onClick={() => setHostTab('submissions')}>
+              <Icon name="code" size={15} /> Submissions
+            </button>
+          </div>
+        ) : (
+          <h3>{standingsTitle}</h3>
+        )}
+      </div>
+      {canReview && hostTab === 'submissions' ? (
+        <SubmissionsPanel contestId={contest.id} live={contest.status === 'active'} userFilter={inspectUser} onUserFilter={setInspectUser} />
+      ) : (
+        <CodeforcesStandings
+          leaderboard={leaderboard}
+          questions={contest.questions}
+          mode={contest.mode}
+          isHost={isHost}
+          onKick={(id, name) => setDialog({ kick: { id, name } })}
+          onInspect={canReview ? (id) => { setInspectUser(id); setHostTab('submissions'); } : undefined}
+          meId={userObj?.id}
+        />
+      )}
     </section>
   );
 

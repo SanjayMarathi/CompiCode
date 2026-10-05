@@ -572,6 +572,9 @@ export default function SolvePlatform() {
               )
             )}
             {!isSubmitting && evalResults && <Verdict key={submitCount} results={evalResults} />}
+            <p className="faint" style={{ fontSize: '0.8rem', marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Icon name="eye" size={13} /> Submitted code is visible to the contest host.
+            </p>
           </div>
         </section>
       )}

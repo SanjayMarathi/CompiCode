@@ -293,6 +293,11 @@ export default function HostPanel() {
                   <div className="form-group"><label>Points</label><input type="number" min="1" className="form-input" value={draft.points} onChange={e => setDraft({ ...draft, points: parseInt(e.target.value) })} /></div>
                   {mode === 'timed' && (<div className="form-group"><label>Time limit (s)</label><input type="number" min="30" className="form-input" value={draft.time_limit} onChange={e => setDraft({ ...draft, time_limit: parseInt(e.target.value) })} /></div>)}
                 </div>
+                {mode !== 'timed' && (
+                  <p className="faint" style={{ fontSize: '0.8rem', margin: '-0.4rem 0 1.1rem' }}>
+                    Want a time limit per problem? Switch the contest to <strong>Timed</strong> mode and each problem gets its own countdown.
+                  </p>
+                )}
                 <div className="flex-between" style={{ marginBottom: '0.5rem' }}>
                   <span className="io-label">Testcases (min 2)</span>
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => setDraft({ ...draft, test_cases: [...draft.test_cases, { input_data: '', expected_output: '' }] })}><Icon name="plus" size={14} /> Row</button>
