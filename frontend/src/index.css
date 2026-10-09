@@ -773,6 +773,13 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .banner strong { color: var(--text-primary); }
 .banner.danger { border-color: var(--danger); background: var(--danger-subtle); color: var(--danger); }
 .banner.danger strong { color: var(--danger); }
+.update-banner {
+  position: fixed; left: 50%; bottom: 1rem; transform: translateX(-50%); z-index: 1000;
+  width: min(620px, calc(100% - 2rem));
+  border-color: var(--accent);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+.update-banner .btn { margin-left: auto; flex-shrink: 0; }
 
 /* ---------- Timeline (landing) ---------- */
 .zz { position: relative; display: flex; flex-direction: column; gap: 4.5rem; padding: 1.5rem 0; width: 100%; }

@@ -12,6 +12,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
+import re
 import time
 import uuid
 from google.cloud.firestore_v1.base_query import FieldFilter
@@ -814,6 +815,24 @@ def participant_block_reason(contest_id: str, contest: dict, user_id: str) -> Op
         return "You are not an approved participant of this contest."
     return None
 
+def open_timed_question(ref, contest_id: str, contest: dict, user_id: str, question_id: str, time_limit: int) -> bool:
+    """Start the user's countdown on a problem now. False if Contest Time has already run out."""
+    window = contest.get("overall_time_limit")
+    if window and contest_elapsed_seconds(contest) >= window * 60:
+        return False
+    now = datetime.utcnow()
+    try:
+        ref.create({
+            "contest_id": contest_id,
+            "user_id": user_id,
+            "question_id": question_id,
+            "started_at": now.isoformat() + "Z",
+            "deadline": (now + timedelta(seconds=time_limit)).isoformat() + "Z",
+        })
+    except AlreadyExists:
+        pass  # another tab or request started it first
+    return True
+
 @app.post("/contests/{contest_id}/questions/{question_id}/start")
 def start_timed_question(contest_id: str, question_id: str, current_user: dict = Depends(get_current_user)):
     """Timed mode: start this user's countdown on a problem, or report the one already running.
@@ -840,20 +859,8 @@ def start_timed_question(contest_id: str, question_id: str, current_user: dict =
         blocked = participant_block_reason(contest_id, contest, current_user["id"])
         if blocked:
             raise HTTPException(status_code=403, detail=blocked)
-        window = contest.get("overall_time_limit")
-        if window and contest_elapsed_seconds(contest) >= window * 60:
+        if not open_timed_question(ref, contest_id, contest, current_user["id"], question_id, time_limit):
             return {"locked": True, "time_limit": time_limit, "elapsed_seconds": 0}
-        now = datetime.utcnow()
-        try:
-            ref.create({
-                "contest_id": contest_id,
-                "user_id": current_user["id"],
-                "question_id": question_id,
-                "started_at": now.isoformat() + "Z",
-                "deadline": (now + timedelta(seconds=time_limit)).isoformat() + "Z",
-            })
-        except AlreadyExists:
-            pass  # another tab started it first
         snap = ref.get()
 
     started = _parse_ts(snap.to_dict().get("started_at"))
@@ -898,10 +905,19 @@ async def submit_code(submission: CodeSubmission, current_user: dict = Depends(g
         return {"passed": False, "results": [], "error": blocked}
 
     if contest.get("mode") == "timed":
-        start = db.collection("question_starts").document(
-            question_start_id(submission.contest_id, current_user["id"], submission.question_id)).get()
+        ref = db.collection("question_starts").document(
+            question_start_id(submission.contest_id, current_user["id"], submission.question_id))
+        start = ref.get()
         if not start.exists:
-            return {"passed": False, "results": [], "error": "This problem is locked: it was not opened before Contest Time ran out."}
+            # The solve page normally starts the countdown when the problem opens. If that
+            # never reached us (an old open tab, a failed request), start it now while
+            # Contest Time is still running.
+            cq = next((q for q in contest.get("questions", []) if q.get("question_id") == submission.question_id), None)
+            if cq is None:
+                return {"passed": False, "results": [], "error": "This problem is not part of the contest."}
+            if not open_timed_question(ref, submission.contest_id, contest, current_user["id"], submission.question_id, cq.get("time_limit") or 0):
+                return {"passed": False, "results": [], "error": "This problem is locked: it was not opened before Contest Time ran out."}
+            start = ref.get()
         deadline = _parse_ts(start.to_dict().get("deadline"))
         if deadline and datetime.utcnow() > deadline + timedelta(seconds=TIMED_GRACE_SECONDS):
             return {"passed": False, "results": [], "error": "Your time on this problem is up."}
@@ -1328,9 +1344,23 @@ def get_participated_contests(current_user: dict = Depends(get_current_user)):
 if os.path.exists("frontend/dist"):
     app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="assets")
 
+    # The entry script's name is content-hashed, so it identifies the deployed build.
+    # Every response carries it, which lets a tab opened before a deploy offer a reload.
+    with open("frontend/dist/index.html", encoding="utf-8") as f:
+        _entry = re.search(r"/assets/(index-[\w-]+\.js)", f.read())
+    FRONTEND_BUILD = _entry.group(1) if _entry else None
+
+    if FRONTEND_BUILD:
+        @app.middleware("http")
+        async def add_build_header(request, call_next):
+            response = await call_next(request)
+            response.headers["X-App-Build"] = FRONTEND_BUILD
+            return response
+
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str):
         file_path = os.path.join("frontend/dist", full_path)
         if os.path.isfile(file_path):
             return FileResponse(file_path)
-        return FileResponse("frontend/dist/index.html")
+        # Always revalidate the page itself so a reload picks up a new deploy.
+        return FileResponse("frontend/dist/index.html", headers={"Cache-Control": "no-cache"})

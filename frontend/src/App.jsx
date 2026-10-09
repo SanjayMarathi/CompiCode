@@ -24,6 +24,13 @@ export default function App() {
   const [isInitializing, setIsInitializing] = useState(() => !!localStorage.getItem('token'));
   const [alertConfig, setAlertConfig] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  const [updateReady, setUpdateReady] = useState(false);
+
+  useEffect(() => {
+    const onUpdate = () => setUpdateReady(true);
+    window.addEventListener('compicode:update', onUpdate);
+    return () => window.removeEventListener('compicode:update', onUpdate);
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -76,6 +83,13 @@ export default function App() {
   return (
     <Router>
       <BackgroundAnimations />
+      {updateReady && (
+        <div className="banner update-banner" role="status">
+          <Icon name="bolt" size={18} />
+          <span><strong>A new version of CompiCode is live.</strong> Reload to update. Your code is saved.</span>
+          <button className="btn btn-primary btn-sm" onClick={() => window.location.reload()}>Reload</button>
+        </div>
+      )}
       <nav className="navbar">
         <Link to="/" className="brand" aria-label="CompiCode home">
           <Logo />
