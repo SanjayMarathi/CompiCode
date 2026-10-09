@@ -416,7 +416,7 @@ export default function ContestLayout({ userObj }) {
         </div>
         <div className="flex" style={{ flexWrap: 'wrap', justifyContent: 'flex-end', gap: '0.6rem' }}>
           {showTimer && (
-            <span className={`timer-chip ${lowTime ? 'low' : ''}`}><span className="tl">{isTimed ? 'Start window' : 'Time left'}</span>{windowClosed ? 'Closed' : formatTime(remaining)}</span>
+            <span className={`timer-chip ${lowTime ? 'low' : ''}`}><span className="tl">{isTimed ? 'Contest Time' : 'Time left'}</span>{windowClosed ? 'Closed' : formatTime(remaining)}</span>
           )}
           {isHost && contest.status === 'active' && (
             <button className="btn btn-danger btn-sm" onClick={() => setDialog('end')}>End contest</button>
@@ -515,7 +515,7 @@ export default function ContestLayout({ userObj }) {
           <section className="fade-in-up stagger-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '2rem 1.25rem', marginBottom: '0.5rem' }}>
             {[
               { icon: 'list', value: contest.questions.length, label: 'Problems' },
-              { icon: 'clock', value: `${contest.overall_time_limit}m`, label: isTimed ? 'Start window' : 'Time limit' },
+              { icon: 'clock', value: `${contest.overall_time_limit}m`, label: isTimed ? 'Contest Time' : 'Time limit' },
               { icon: 'alert', value: formatPenalty(contest.penalty_per_wrong_answer), label: 'Wrong answer' },
             ].map((s) => (
               <div key={s.label} className="bcard bcard-sm">
@@ -573,7 +573,7 @@ export default function ContestLayout({ userObj }) {
       {header}
       <div className="stack">
         {windowClosed ? (
-          <div className="banner slide-in-right"><Icon name="lock" size={18} /><span><strong>The start window has closed.</strong> Problems you haven't opened are locked. You can still finish the ones you already opened.</span></div>
+          <div className="banner slide-in-right"><Icon name="lock" size={18} /><span><strong>Contest Time is over.</strong> Problems you haven't opened are locked. You can still finish the ones you already opened.</span></div>
         ) : isLateJoiner && elapsedSeconds > 20 && (
           <div className="banner slide-in-right"><Icon name="bolt" size={18} /><span><strong>Contest in progress.</strong> Pick a problem and start solving.</span></div>
         )}
@@ -595,7 +595,7 @@ export default function ContestLayout({ userObj }) {
             <ul className="list">
               {contest.questions.map((q, idx) => {
                 const isSolved = solvedIds.includes(q.id);
-                // Timed: a problem locks when its own countdown runs out, or if it was never opened before the start window closed.
+                // Timed: a problem locks when its own countdown runs out, or if it was never opened before Contest Time ran out.
                 const startedAt = questionStarts?.[q.id];
                 const opened = startedAt !== undefined;
                 const left = opened ? Math.max(0, (q.time_limit || 0) - Math.floor((Date.now() - startedAt) / 1000)) : null;
@@ -613,7 +613,7 @@ export default function ContestLayout({ userObj }) {
                     {isSolved ? (
                       <Link to={`/solve/${contest.id}/${q.id}`} className="btn btn-success btn-sm">Review code</Link>
                     ) : locked ? (
-                      <button className="btn btn-ghost btn-sm" disabled title={opened ? 'Your time on this problem has run out' : 'The start window closed before you opened this problem'}><Icon name="lock" size={14} /> Locked</button>
+                      <button className="btn btn-ghost btn-sm" disabled title={opened ? 'Your time on this problem has run out' : 'Contest Time ran out before you opened this problem'}><Icon name="lock" size={14} /> Locked</button>
                     ) : (
                       <Link
                         to={`/solve/${contest.id}/${q.id}`}

@@ -170,11 +170,11 @@ There are three different clocks:
 
 | Limit | Where you set it | Applies to | What happens at zero |
 |---|---|---|---|
-| **Contest time limit** | Contest form, in minutes (1 to 480, default 60) | The whole contest, every mode | Standard and Sudden Death: the contest ends for everyone and standings lock. Timed: the start window closes (see below). |
+| **Contest time limit** | Contest form, in minutes (1 to 480, default 60) | The whole contest, every mode | Standard and Sudden Death: the contest ends for everyone and standings lock. Timed: no new problems can be opened (see below). |
 | **Problem time limit** | Problem editor, in seconds (minimum 30, default 300) | **Timed mode**, one limit **per problem** | The participant's current code is auto-submitted and that problem locks for them. |
-| **Execution limit** | The judge | Every run of a submission | A run that exceeds it fails. The reference executor (`executor.py`) allows Python 2 s, C++ 2 s (after a 5 s compile) and Java 3 s (after a 5 s compile). |
+| **Execution limit** | The judge | Every run of a submission | A run that exceeds it fails. The executor (`executor.py`) allows Python 2 s, C++ 2 s and Java 3 s per testcase, after a single compile of up to 10 s. |
 
-In **Timed** mode the contest limit is a **start window**: one clock shared by every problem, counting from the contest start. A problem's own countdown starts the first time a participant opens it, and it can only be opened while the start window is open. A problem opened in time keeps its full countdown even if the start window closes first. Problems never opened before the window closes are locked. The contest ends once the last open countdown has run out. Start times are recorded on the server, and submissions after a problem's deadline are rejected.
+In **Timed** mode there are two clocks on screen. **Contest Time** is one clock shared by every problem, counting from the contest start. **Problem Time** is a problem's own countdown, which starts the first time a participant opens it. A problem can only be opened while Contest Time is running, and a problem opened in time keeps its full Problem Time even if Contest Time runs out first. Problems never opened before Contest Time runs out are locked. The contest ends once the last open countdown has run out. Start times are recorded on the server, and submissions after a problem's deadline are rejected.
 
 In **Standard** and **Sudden Death** the per-problem limit is not used (Sudden Death rounds end when somebody solves the problem, and the contest limit is the match clock).
 
@@ -223,7 +223,8 @@ flowchart LR
 ```
 
 - The **frontend** is a single-page app. In production FastAPI serves the built files from `frontend/dist`, so the whole product runs as one container on one port.
-- The **judge** is a separate service: the API posts `{code, language, test_cases}` to the executor Space's `/evaluate` endpoint and gets per-testcase results back. `executor.py` in this repo holds the execution helpers (Python, C++, Java, with timeouts) used by that service.
+- The **judge** is a separate service: the API posts `{code, language, test_cases}` to the executor Space's `/evaluate` endpoint and gets per-testcase results back. `executor.py` in this repo is a copy of that service's execution code: it compiles a submission once, then runs every testcase against it in parallel (Python, C++, Java, with timeouts). The executor image also precompiles `<bits/stdc++.h>` so C++ that includes it compiles quickly.
+- **Keeping the judge awake.** Free Hugging Face Spaces sleep after 48 hours without traffic. The API pings the executor when it boots and every 30 minutes while running, and the site asks it to wake the executor on every page load. A submission that arrives while the executor is still starting up waits for it (up to 90 s) instead of failing. Optionally, add an `HF_TOKEN` secret (write access to the executor Space) to the CompiCode Space and the API will also restart the executor if it is asleep or crashed. `EXECUTOR_URL` and `EXECUTOR_SPACE` override the executor's address.
 - Every judged submission is stored with its **source code, language and verdict**, which is what the host's review tab reads. Code is capped at 100,000 characters.
 - **Sudden Death** rounds are driven by in-process timers and pushed to clients over the WebSocket. When the match finishes, the result is written to Firestore.
 
@@ -249,7 +250,7 @@ flowchart LR
 .
 ├── main.py                 # FastAPI app: auth, contests, judging, review, leaderboard, WebSocket, sweeper
 ├── database.py             # Firestore client (FIREBASE_KEY_JSON env var or firebase-key.json)
-├── executor.py             # Execution helpers for the standalone executor service
+├── executor.py             # Copy of the standalone executor service's execution code
 ├── contest_manager.py      # Early in-memory contest manager (not used by the API)
 ├── Dockerfile              # Builds the frontend, then serves everything with Uvicorn on :7860
 ├── requirements.txt
@@ -365,7 +366,7 @@ Most routes require `Authorization: Bearer <token>`. Registration, login, the co
 | `DELETE` | `/contests/{id}` | Host deletes the contest, its participants, submissions and problem start times |
 | `GET` | `/contests/{id}/leaderboard` | Standings |
 | `GET` | `/contests/{id}/my-solved` | Problems you have solved, plus how long ago you opened each one (Timed mode) |
-| `POST` | `/contests/{id}/questions/{question_id}/start` | Timed mode: start your countdown on a problem (or report the running one). Returns `locked` once the start window has closed |
+| `POST` | `/contests/{id}/questions/{question_id}/start` | Timed mode: start your countdown on a problem (or report the running one). Returns `locked` once Contest Time has run out |
 
 **Participation and approvals**
 
@@ -382,7 +383,8 @@ Most routes require `Authorization: Bearer <token>`. Registration, login, the co
 
 | Method | Route | Description |
 |---|---|---|
-| `POST` | `/submit` | Judge a submission (checks time, participation, prior solves and code length) |
+| `POST` | `/submit` | Judge a submission (checks time, participation, prior solves and code length; waits for a waking executor) |
+| `POST` | `/executor/wake` | Ping the executor so a sleeping one starts booting. Called by the site on load; throttled to once a minute |
 | `GET` | `/contests/{id}/submissions` | **Host only:** every submission, newest first, without the code. Optional `user_id`, `question_id` and `limit` (max 500) |
 | `GET` | `/contests/{id}/submissions/{submission_id}` | **Host only:** one submission including its source code |
 | `WS` | `/ws/contest/{id}` | Pushes `SYNC_STATE`, `TIMER_TICK`, `CONTEST_ENDED`, `CONTEST_DELETED`, `KICK_USER` |

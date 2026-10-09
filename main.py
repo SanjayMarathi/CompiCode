@@ -12,6 +12,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
+import time
 import uuid
 from google.cloud.firestore_v1.base_query import FieldFilter
 from google.api_core.exceptions import AlreadyExists
@@ -29,6 +30,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 SWEEP_INTERVAL_SECONDS = 30
 MAX_CODE_CHARS = 100_000  # stored with every submission; keeps documents far below Firestore's 1 MiB limit
 TIMED_GRACE_SECONDS = 15  # Timed mode: lets the auto-submit fired at a problem's deadline still land
+
+EXECUTOR_URL = os.getenv("EXECUTOR_URL", "https://sanjaymarathi-compicode-executor.hf.space").rstrip("/")
+EXECUTOR_SPACE = os.getenv("EXECUTOR_SPACE", "sanjaymarathi/compicode-executor")
+EXECUTOR_KEEPALIVE_SECONDS = 30 * 60  # free Spaces sleep after 48h without traffic
+EXECUTOR_WAKE_SECONDS = 90  # how long a submission waits for a sleeping executor to boot
 MAIN_LOOP: Optional[asyncio.AbstractEventLoop] = None
 
 
@@ -37,10 +43,12 @@ async def lifespan(_app: FastAPI):
     global MAIN_LOOP
     MAIN_LOOP = asyncio.get_running_loop()
     sweeper = asyncio.create_task(contest_sweeper())
+    keepalive = asyncio.create_task(executor_keepalive())
     try:
         yield
     finally:
         sweeper.cancel()
+        keepalive.cancel()
 
 
 app = FastAPI(title="CompiCode", lifespan=lifespan)
@@ -329,6 +337,88 @@ def username_of(user_id: Optional[str]) -> str:
         doc = db.collection("users").document(user_id).get()
         return doc.to_dict().get("username", "Unknown") if doc.exists else "Unknown"
     return cached(f"user:{user_id}", 60, _load)
+
+# --- Executor (a separate Hugging Face Space) ---
+# Free Spaces sleep after 48 hours without traffic, and a sleeping Space answers
+# with a loading page instead of results. So CompiCode pings the executor when
+# it boots and whenever the site is opened, keeps pinging it while running so
+# it never falls asleep, and a submission that lands mid-boot waits for it.
+# With an HF_TOKEN secret it can also restart a Space that is asleep or crashed.
+class ExecutorUnavailable(Exception):
+    pass
+
+_executor_pinged_at = 0.0
+_executor_restarted_at = 0.0
+
+async def wake_executor(force: bool = False) -> None:
+    global _executor_pinged_at, _executor_restarted_at
+    now = time.monotonic()
+    if not force and now - _executor_pinged_at < 60:
+        return
+    _executor_pinged_at = now
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            await client.get(f"{EXECUTOR_URL}/health")
+        except httpx.HTTPError:
+            pass  # still booting; the request alone starts the wake-up
+        token = os.getenv("HF_TOKEN")
+        if not token or now - _executor_restarted_at < 600:
+            return
+        try:
+            runtime = await client.get(f"https://huggingface.co/api/spaces/{EXECUTOR_SPACE}/runtime", follow_redirects=True)
+            stage = runtime.json().get("stage")
+            if stage in ("SLEEPING", "RUNTIME_ERROR"):
+                _executor_restarted_at = now
+                await client.post(f"https://huggingface.co/api/spaces/{EXECUTOR_SPACE}/restart",
+                                  headers={"Authorization": f"Bearer {token}"})
+                print(f"[executor] was {stage}; restart requested")
+        except (httpx.HTTPError, ValueError) as e:
+            print(f"[executor] restart check failed: {e}")
+
+async def executor_keepalive():
+    while True:
+        try:
+            await wake_executor(force=True)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            print(f"[executor] keepalive failed: {e}")
+        await asyncio.sleep(EXECUTOR_KEEPALIVE_SECONDS)
+
+async def call_executor(payload: dict) -> list:
+    """Judge `payload` and return its results, waiting out a cold start.
+
+    Raises httpx.TimeoutException when the executor is up but too slow, and
+    ExecutorUnavailable when it never came up.
+    """
+    deadline = time.monotonic() + EXECUTOR_WAKE_SECONDS
+    delay = 2.0
+    async with httpx.AsyncClient() as client:
+        while True:
+            try:
+                response = await client.post(f"{EXECUTOR_URL}/evaluate", json=payload, timeout=60.0)
+                if response.status_code == 200:
+                    try:
+                        return response.json().get("results", [])
+                    except ValueError:
+                        problem = "it answered with a loading page"
+                elif response.status_code in (400, 413, 422):
+                    raise ExecutorUnavailable(f"it rejected the request (HTTP {response.status_code})")
+                else:
+                    problem = f"HTTP {response.status_code}"
+            except (httpx.ConnectError, httpx.RemoteProtocolError, httpx.ReadError) as e:
+                problem = str(e) or type(e).__name__
+            if time.monotonic() + delay >= deadline:
+                raise ExecutorUnavailable(problem)
+            asyncio.create_task(wake_executor())
+            await asyncio.sleep(delay)
+            delay = min(delay * 1.5, 10.0)
+
+@app.post("/executor/wake")
+async def wake_executor_endpoint():
+    """The site calls this on load so a sleeping executor boots before anyone submits."""
+    asyncio.create_task(wake_executor())
+    return {"ok": True}
 
 # --- Async Timer Loop for Sudden Death ---
 async def sudden_death_timer(contest_id: str):
@@ -689,20 +779,15 @@ async def sandbox_test(req: SandboxTestRequest, current_user: dict = Depends(get
     }
     eval_results = []
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://sanjaymarathi-compicode-executor.hf.space/evaluate",
-                json=payload,
-                timeout=20.0
-            )
-            data = response.json()
-            eval_results = data.get("results", [])
-            for i, res in enumerate(eval_results):
-                if i < len(req.test_cases):
-                    res["input"] = req.test_cases[i].get("input_data", "")
-                    res["expected"] = req.test_cases[i].get("expected_output", "")
+        eval_results = await call_executor(payload)
+        for i, res in enumerate(eval_results):
+            if i < len(req.test_cases):
+                res["input"] = req.test_cases[i].get("input_data", "")
+                res["expected"] = req.test_cases[i].get("expected_output", "")
     except httpx.TimeoutException:
         return {"passed": False, "results": [], "error": "Execution timed out (Server unresponsive)"}
+    except ExecutorUnavailable as e:
+        return {"passed": False, "results": [], "error": f"The judge is starting up. Try again in a minute. ({e})"}
     except Exception as e:
         return {"passed": False, "results": [], "error": f"Execution engine error: {str(e)}"}
         
@@ -733,7 +818,7 @@ def participant_block_reason(contest_id: str, contest: dict, user_id: str) -> Op
 def start_timed_question(contest_id: str, question_id: str, current_user: dict = Depends(get_current_user)):
     """Timed mode: start this user's countdown on a problem, or report the one already running.
 
-    Problems can only be started while the contest's start window is open.
+    Problems can only be started while Contest Time is still running.
     """
     contest_doc = db.collection("contests").document(contest_id).get()
     if not contest_doc.exists:
@@ -816,7 +901,7 @@ async def submit_code(submission: CodeSubmission, current_user: dict = Depends(g
         start = db.collection("question_starts").document(
             question_start_id(submission.contest_id, current_user["id"], submission.question_id)).get()
         if not start.exists:
-            return {"passed": False, "results": [], "error": "This problem is locked: it was not opened before the start window closed."}
+            return {"passed": False, "results": [], "error": "This problem is locked: it was not opened before Contest Time ran out."}
         deadline = _parse_ts(start.to_dict().get("deadline"))
         if deadline and datetime.utcnow() > deadline + timedelta(seconds=TIMED_GRACE_SECONDS):
             return {"passed": False, "results": [], "error": "Your time on this problem is up."}
@@ -838,24 +923,19 @@ async def submit_code(submission: CodeSubmission, current_user: dict = Depends(g
     
     eval_results = []
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://sanjaymarathi-compicode-executor.hf.space/evaluate",
-                json=payload,
-                timeout=20.0
-            )
-            data = response.json()
-            eval_results = data.get("results", [])
-            for i, res in enumerate(eval_results):
-                if i < len(test_cases):
-                    if i < 2:
-                        res["input"] = test_cases[i].get("input_data", "")
-                        res["expected"] = test_cases[i].get("expected_output", "")
-                    else:
-                        res["input"] = "Hidden Testcase"
-                        res["expected"] = "Hidden Testcase"
+        eval_results = await call_executor(payload)
+        for i, res in enumerate(eval_results):
+            if i < len(test_cases):
+                if i < 2:
+                    res["input"] = test_cases[i].get("input_data", "")
+                    res["expected"] = test_cases[i].get("expected_output", "")
+                else:
+                    res["input"] = "Hidden Testcase"
+                    res["expected"] = "Hidden Testcase"
     except httpx.TimeoutException:
         return {"passed": False, "results": [], "error": "Executor timed out. Please try again."}
+    except ExecutorUnavailable as e:
+        return {"passed": False, "results": [], "error": f"The judge is starting up. Please submit again in a minute. ({e})"}
     except Exception as e:
         return {"passed": False, "results": [], "error": f"Executor unavailable: {str(e)}"}
             

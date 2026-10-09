@@ -41,6 +41,9 @@ export default function App() {
       setAlertConfig({ message, title: 'Notice' });
     };
 
+    // Start waking the judge as soon as anyone opens the site, before their first submit.
+    axios.post(`${API_URL}/executor/wake`).catch(() => {});
+
     const token = localStorage.getItem('token');
     if (token) {
       setAuthToken(token);

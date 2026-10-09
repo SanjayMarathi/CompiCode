@@ -279,7 +279,7 @@ export default function SolvePlatform() {
       const limit = data.time_limit;
       if (data.locked) {
         setQuestionElapsed(limit);
-        if (!solvedRef.current) lock('Locked: the start window closed before you opened this problem');
+        if (!solvedRef.current) lock('Locked: Contest Time ran out before you opened this problem');
         return;
       }
       const start = Date.now() - data.elapsed_seconds * 1000;
@@ -487,8 +487,8 @@ export default function SolvePlatform() {
           {!isSuddenDeath && contestInfo && contestInfo.mode === 'standard' && <TimerChip label="Time left" value={formatTime(overallRemaining)} low={overallRemaining <= 60} />}
           {!isSuddenDeath && contestInfo && contestInfo.mode === 'timed' && (
             <>
-              {contestInfo.overall_time_limit ? <TimerChip label="Start window" value={overallRemaining > 0 ? formatTime(overallRemaining) : 'Closed'} low={overallRemaining <= 60} /> : null}
-              <TimerChip label="This problem" value={timedRemaining === null ? '–:––' : formatTime(timedRemaining)} low={timedRemaining !== null && timedRemaining <= 30} />
+              {contestInfo.overall_time_limit ? <TimerChip label="Contest Time" value={overallRemaining > 0 ? formatTime(overallRemaining) : 'Closed'} low={overallRemaining <= 60} /> : null}
+              <TimerChip label="Problem Time" value={timedRemaining === null ? '–:––' : formatTime(timedRemaining)} low={timedRemaining !== null && timedRemaining <= 30} />
             </>
           )}
           {isSuddenDeath && <span className="badge badge-solid"><Icon name="bolt" size={12} /> Round {sdState ? sdState.current_q_idx + 1 : 1}</span>}
