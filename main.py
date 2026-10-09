@@ -1140,8 +1140,9 @@ def get_leaderboard(contest_id: str):
         total_obtained_tcs = 0
         total_time_taken = 0
         total_obtained_points = 0
+        total_penalty = 0
         q_stats = {}
-        
+
         for qid in question_ids:
             q_subs = [s for s in u_subs if s.get("question_id") == qid]
             wrong = sum(1 for s in q_subs if not s.get("passed", False))
@@ -1165,7 +1166,11 @@ def get_leaderboard(contest_id: str):
                 obtained_q_points = q_points if solved else 0
                 
             total_obtained_points += obtained_q_points
-            
+
+            # Wrong answers cost points only once the problem is solved.
+            q_penalty = sum(s.get("penalty_incurred", 0) for s in q_subs) if solved else 0
+            total_penalty += q_penalty
+
             q_stats[str(qid)] = {
                 "solved": solved,
                 "wrong_count": wrong,
@@ -1174,16 +1179,15 @@ def get_leaderboard(contest_id: str):
                 "total_testcases": q_total_tcs,
                 "obtained_points": obtained_q_points,
                 "total_points": q_points,
-                "penalty": sum(s.get("penalty_incurred", 0) for s in q_subs)
+                "penalty": q_penalty
             }
 
         passed_qids = list(set(s.get("question_id") for s in u_subs if s.get("passed", False)))
-        total_penalty = sum(s.get("penalty_incurred", 0) for s in u_subs)
 
         leaderboard.append({
             "user_id": u.get("id"),
             "username": u.get("username"),
-            # Every wrong submission costs the contest's penalty in points, so the score can go below zero.
+            # A problem solved after many wrong answers can be worth less than zero.
             "score": round(total_obtained_points - total_penalty, 2),
             "points_earned": round(total_obtained_points, 2),
             "total_points": total_contest_points,

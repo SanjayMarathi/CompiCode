@@ -66,7 +66,7 @@ export const MODE_META = {
     label: 'Standard',
     icon: 'list',
     short: 'Solve everything, your pace',
-    desc: 'Players solve all problems independently inside one global time limit. Wrong answers cost points. Ranked by score, then time.',
+    desc: 'Players solve all problems independently inside one global time limit. Wrong answers cost points once you solve the problem. Ranked by score, then time.',
   },
   sudden_death: {
     label: 'Sudden Death',

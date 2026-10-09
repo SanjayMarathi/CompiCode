@@ -6,7 +6,7 @@ import { MODE_META } from '../config';
 const MODES = [
   { key: 'sudden_death', side: 'left', filled: false, points: ['Everyone is on the same problem', 'First to pass every test claims the round', 'The whole lobby advances together'] },
   { key: 'timed', side: 'right', filled: true, points: ['Every problem has its own countdown', 'When it hits zero, that problem locks', 'Rewards speed and decisiveness'] },
-  { key: 'standard', side: 'left', filled: false, points: ['Solve all problems at your own pace', 'One global time limit for the contest', 'Wrong answers cost points'] },
+  { key: 'standard', side: 'left', filled: false, points: ['Solve all problems at your own pace', 'One global time limit for the contest', 'Wrong answers cost points once solved'] },
 ];
 
 const STEPS = [

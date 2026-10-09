@@ -62,7 +62,7 @@ export default function CodeforcesStandings({ leaderboard, questions, title, isH
                 <td>
                   <span className="num-strong" style={l.score < 0 ? { color: 'var(--danger)' } : undefined}>{l.score || 0}</span> <span className="num-sub">/ {l.total_points || 0}</span>
                   {l.penalty > 0 && (
-                    <div className="cell-bad" style={{ fontSize: '0.72rem' }} title={`${l.points_earned ?? 0} points earned, ${l.penalty} lost to wrong answers`}>−{l.penalty} WA</div>
+                    <div className="cell-bad" style={{ fontSize: '0.72rem' }} title={`${l.points_earned ?? 0} points earned, ${l.penalty} lost to wrong answers on solved problems`}>−{l.penalty} WA</div>
                   )}
                 </td>
                 <td>
@@ -77,9 +77,11 @@ export default function CodeforcesStandings({ leaderboard, questions, title, isH
                 {qs.map((q) => {
                   const s = l.question_stats?.[String(q.id)];
                   if (!s || !(s.solved || s.testcases_passed > 0 || s.wrong_count > 0)) return <td key={q.id} className="faint">·</td>;
-                  const wrongLabel = `${s.wrong_count} WA${s.penalty > 0 ? ` · −${s.penalty}` : ''}`;
+                  // Wrong answers cost points only once the problem is solved, so only then show the minus.
+                  const wrongLabel = `${s.wrong_count} WA${s.solved && s.penalty > 0 ? ` · −${s.penalty}` : ''}`;
+                  const wrongs = `${s.wrong_count} wrong ${s.wrong_count === 1 ? 'answer' : 'answers'}`;
                   return (
-                    <td key={q.id} title={s.wrong_count > 0 ? `${s.wrong_count} wrong ${s.wrong_count === 1 ? 'answer' : 'answers'}, −${s.penalty || 0} points` : undefined}>
+                    <td key={q.id} title={s.wrong_count > 0 ? (s.solved ? `${wrongs} before solving: −${s.penalty || 0} points` : `${wrongs}. No points lost unless the problem is solved.`) : undefined}>
                       {s.solved ? (
                         <div className="cell-ok">{formatTimeStr(s.time_taken || 0)}</div>
                       ) : s.testcases_passed > 0 ? (

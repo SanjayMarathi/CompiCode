@@ -56,7 +56,7 @@ Host or join live coding contests, get judged automatically, review what everyon
 
 | Mode | How it plays |
 |---|---|
-| **Standard** | Everyone solves every problem at their own pace inside one global time limit. Wrong answers cost points. Ranked by score, then time. |
+| **Standard** | Everyone solves every problem at their own pace inside one global time limit. Wrong answers cost points once the problem is solved. Ranked by score, then time. |
 | **Timed** | The contest clock is the window for opening problems. Each problem you open gets its own countdown, which keeps running after the window closes. When it expires, that problem locks for you. |
 | **Sudden Death** | The whole lobby is on the same problem. The first person to pass every testcase claims the round and everybody advances together. |
 
@@ -184,11 +184,11 @@ In Timed mode each problem's limit is shown next to it in the host's problem lis
 
 Set per contest in the form (default **5**, use **0** to turn it off).
 
-- Every submission that does not pass all testcases (wrong answer, runtime error or compile error) **subtracts the penalty from that participant's score**. With a penalty of 1, three wrong answers cost 3 points.
+- A submission that does not pass all testcases (wrong answer, runtime error or compile error) is a wrong answer. Wrong answers on a problem **cost nothing until that problem is solved**. Once it is solved, each wrong answer before it subtracts the penalty from the score. With a penalty of 1, solving a problem after three wrong answers costs 3 points.
 - Once a problem is solved it accepts no further submissions, so a solved problem never collects more penalty.
 - Submissions that were never judged cost nothing: the contest not running, an unapproved participant, or the judge being unreachable.
-- **Score = points earned − penalty**, so it can go below zero when someone only has wrong answers.
-- The standings show the points lost under the score (for example `−3 WA`) and, per problem, the wrong attempts and their cost (for example `2 WA · −2`).
+- **Score = points earned − penalty on solved problems.** A problem solved after many wrong answers can be worth less than zero: 10 points with three wrong answers at 5 each counts as −5.
+- The standings show the points lost under the score (for example `−3 WA`) and, per solved problem, the wrong attempts and their cost (for example `2 WA · −2`). Unsolved problems show only the attempts (for example `2 WA`).
 
 ### Points and ranking
 
