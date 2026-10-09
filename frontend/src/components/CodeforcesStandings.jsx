@@ -60,7 +60,10 @@ export default function CodeforcesStandings({ leaderboard, questions, title, isH
                   )}
                 </td>
                 <td>
-                  <span className="num-strong">{l.score || 0}</span> <span className="num-sub">/ {l.total_points || 0}</span>
+                  <span className="num-strong" style={l.score < 0 ? { color: 'var(--danger)' } : undefined}>{l.score || 0}</span> <span className="num-sub">/ {l.total_points || 0}</span>
+                  {l.penalty > 0 && (
+                    <div className="cell-bad" style={{ fontSize: '0.72rem' }} title={`${l.points_earned ?? 0} points earned, ${l.penalty} lost to wrong answers`}>−{l.penalty} WA</div>
+                  )}
                 </td>
                 <td>
                   <span className="num-strong">{l.solved_count || 0}</span> <span className="num-sub">/ {l.total_questions || 0}</span>
@@ -70,21 +73,21 @@ export default function CodeforcesStandings({ leaderboard, questions, title, isH
                 </td>
                 <td className="mono" style={{ fontSize: '0.85rem' }}>
                   <div>{formatTimeStr(l.total_time || 0)}</div>
-                  {l.penalty > 0 && <div className="cell-bad" style={{ fontSize: '0.72rem' }}>+{l.penalty} pen</div>}
                 </td>
                 {qs.map((q) => {
                   const s = l.question_stats?.[String(q.id)];
                   if (!s || !(s.solved || s.testcases_passed > 0 || s.wrong_count > 0)) return <td key={q.id} className="faint">·</td>;
+                  const wrongLabel = `${s.wrong_count} WA${s.penalty > 0 ? ` · −${s.penalty}` : ''}`;
                   return (
-                    <td key={q.id}>
+                    <td key={q.id} title={s.wrong_count > 0 ? `${s.wrong_count} wrong ${s.wrong_count === 1 ? 'answer' : 'answers'}, −${s.penalty || 0} points` : undefined}>
                       {s.solved ? (
                         <div className="cell-ok">{formatTimeStr(s.time_taken || 0)}</div>
                       ) : s.testcases_passed > 0 ? (
                         <div className="num-strong" style={{ fontSize: '0.85rem' }}>{s.testcases_passed}/{s.total_testcases}</div>
                       ) : (
-                        <div className="cell-bad">−{s.wrong_count}</div>
+                        <div className="cell-bad">{wrongLabel}</div>
                       )}
-                      {(s.solved || s.testcases_passed > 0) && s.wrong_count > 0 && <div className="cell-bad" style={{ fontSize: '0.7rem' }}>+{s.wrong_count} fails</div>}
+                      {(s.solved || s.testcases_passed > 0) && s.wrong_count > 0 && <div className="cell-bad" style={{ fontSize: '0.7rem' }}>{wrongLabel}</div>}
                     </td>
                   );
                 })}

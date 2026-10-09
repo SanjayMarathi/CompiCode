@@ -56,7 +56,7 @@ Host or join live coding contests, get judged automatically, review what everyon
 
 | Mode | How it plays |
 |---|---|
-| **Standard** | Everyone solves every problem at their own pace inside one global time limit. Ranked by score, then lowest penalty time. |
+| **Standard** | Everyone solves every problem at their own pace inside one global time limit. Wrong answers cost points. Ranked by score, then time. |
 | **Timed** | The contest clock is the window for opening problems. Each problem you open gets its own countdown, which keeps running after the window closes. When it expires, that problem locks for you. |
 | **Sudden Death** | The whole lobby is on the same problem. The first person to pass every testcase claims the round and everybody advances together. |
 
@@ -172,7 +172,7 @@ There are three different clocks:
 |---|---|---|---|
 | **Contest time limit** | Contest form, in minutes (1 to 480, default 60) | The whole contest, every mode | Standard and Sudden Death: the contest ends for everyone and standings lock. Timed: no new problems can be opened (see below). |
 | **Problem time limit** | Problem editor, in seconds (minimum 30, default 300) | **Timed mode**, one limit **per problem** | The participant's current code is auto-submitted and that problem locks for them. |
-| **Execution limit** | The judge | Every run of a submission | A run that exceeds it fails. The executor (`executor.py`) allows Python 2 s, C++ 2 s and Java 3 s per testcase, after a single compile of up to 10 s. |
+| **Execution limit** | The judge | Every run of a submission | A run that exceeds it fails. The [C++ executor](executor/) allows Python 2 s, C++ 2 s and Java 3 s per testcase, after a single compile of up to 10 s. |
 
 In **Timed** mode there are two clocks on screen. **Contest Time** is one clock shared by every problem, counting from the contest start. **Problem Time** is a problem's own countdown, which starts the first time a participant opens it. A problem can only be opened while Contest Time is running, and a problem opened in time keeps its full Problem Time even if Contest Time runs out first. Problems never opened before Contest Time runs out are locked. The contest ends once the last open countdown has run out. Start times are recorded on the server, and submissions after a problem's deadline are rejected.
 
@@ -184,15 +184,15 @@ In Timed mode each problem's limit is shown next to it in the host's problem lis
 
 Set per contest in the form (default **5**, use **0** to turn it off).
 
-- Every submission that does not pass all testcases (wrong answer, runtime error or compile error) adds the penalty to that participant's total.
+- Every submission that does not pass all testcases (wrong answer, runtime error or compile error) **subtracts the penalty from that participant's score**. With a penalty of 1, three wrong answers cost 3 points.
 - Once a problem is solved it accepts no further submissions, so a solved problem never collects more penalty.
 - Submissions that were never judged cost nothing: the contest not running, an unapproved participant, or the judge being unreachable.
-- The standings show the total under the finish time (for example `+10 pen`) and the wrong attempts per problem (for example `+2 fails`).
-- Penalty is the **final tie-breaker**. It does not subtract from the score.
+- **Score = points earned − penalty**, so it can go below zero when someone only has wrong answers.
+- The standings show the points lost under the score (for example `−3 WA`) and, per problem, the wrong attempts and their cost (for example `2 WA · −2`).
 
 ### Points and ranking
 
-Each problem has its own points (default 10). Two evaluation modes exist in the API: `strict`, which the contest form uses, awards a problem's points only when every testcase passes, and `partial` scales the points by the testcases passed. Participants are ranked by score, then total time, then testcases passed, then penalty.
+Each problem has its own points (default 10). Two evaluation modes exist in the API: `strict`, which the contest form uses, awards a problem's points only when every testcase passes, and `partial` scales the points by the testcases passed. Participants are ranked by score (after penalties), then total time, then testcases passed, then penalty.
 
 ---
 
@@ -210,7 +210,7 @@ flowchart LR
       SD["Sudden-death<br/>round timers"]
     end
     DB[("Firebase Firestore")]
-    EX["Code executor<br/>(separate HF Space)"]
+    EX["C++ executor microservice<br/>(separate HF Space)"]
 
     UI -- "REST + JWT" --> API
     UI <-- "live state, kicks, end/delete" --> WS
@@ -223,7 +223,7 @@ flowchart LR
 ```
 
 - The **frontend** is a single-page app. In production FastAPI serves the built files from `frontend/dist`, so the whole product runs as one container on one port.
-- The **judge** is a separate service: the API posts `{code, language, test_cases}` to the executor Space's `/evaluate` endpoint and gets per-testcase results back. `executor.py` in this repo is a copy of that service's execution code: it compiles a submission once, then runs every testcase against it in parallel (Python, C++, Java, with timeouts). The executor image also precompiles `<bits/stdc++.h>` so C++ that includes it compiles quickly.
+- The **judge** is a separate **C++ microservice** ([`executor/`](executor/)) deployed as its own Space. The API posts `{code, language, test_cases}` to its `/evaluate` endpoint and gets per-testcase results back. It compiles a submission once, then runs every testcase in parallel, each in its own process group with a time limit and capped output (Python, C++, Java). See [executor/README.md](executor/README.md).
 - **Keeping the judge awake.** Free Hugging Face Spaces sleep after 48 hours without traffic. The API pings the executor when it boots and every 30 minutes while running, and the site asks it to wake the executor on every page load. A submission that arrives while the executor is still starting up waits for it (up to 90 s) instead of failing. Optionally, add an `HF_TOKEN` secret (write access to the executor Space) to the CompiCode Space and the API will also restart the executor if it is asleep or crashed. `EXECUTOR_URL` and `EXECUTOR_SPACE` override the executor's address.
 - Every judged submission is stored with its **source code, language and verdict**, which is what the host's review tab reads. Code is capped at 100,000 characters.
 - **Sudden Death** rounds are driven by in-process timers and pushed to clients over the WebSocket. When the match finishes, the result is written to Firestore.
@@ -239,7 +239,7 @@ flowchart LR
 | Backend | FastAPI, Uvicorn, Pydantic, WebSockets, HTTPX |
 | Auth | JWT (`python-jose`), bcrypt (`passlib`) |
 | Database | Firebase Firestore (`firebase-admin`) |
-| Judge | Separate sandboxed executor service (Python / C++ / Java) |
+| Judge | C++17 microservice (cpp-httplib, nlohmann/json, POSIX processes) judging Python / C++ / Java |
 | Hosting | Docker on Hugging Face Spaces |
 
 ---
@@ -250,7 +250,10 @@ flowchart LR
 .
 ├── main.py                 # FastAPI app: auth, contests, judging, review, leaderboard, WebSocket, sweeper
 ├── database.py             # Firestore client (FIREBASE_KEY_JSON env var or firebase-key.json)
-├── executor.py             # Copy of the standalone executor service's execution code
+├── executor/               # C++ judge microservice, deployed as its own Space
+│   ├── server.cpp          # HTTP server: compile once, run testcases in parallel
+│   ├── Dockerfile          # g++, JDK, Python, tini; precompiles <bits/stdc++.h>
+│   └── README.md           # Executor API and Space config
 ├── contest_manager.py      # Early in-memory contest manager (not used by the API)
 ├── Dockerfile              # Builds the frontend, then serves everything with Uvicorn on :7860
 ├── requirements.txt

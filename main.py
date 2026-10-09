@@ -1167,13 +1167,14 @@ def get_leaderboard(contest_id: str):
             total_obtained_points += obtained_q_points
             
             q_stats[str(qid)] = {
-                "solved": solved, 
-                "wrong_count": wrong, 
-                "time_taken": time_taken, 
+                "solved": solved,
+                "wrong_count": wrong,
+                "time_taken": time_taken,
                 "testcases_passed": max_tc,
                 "total_testcases": q_total_tcs,
                 "obtained_points": obtained_q_points,
-                "total_points": q_points
+                "total_points": q_points,
+                "penalty": sum(s.get("penalty_incurred", 0) for s in q_subs)
             }
 
         passed_qids = list(set(s.get("question_id") for s in u_subs if s.get("passed", False)))
@@ -1182,7 +1183,9 @@ def get_leaderboard(contest_id: str):
         leaderboard.append({
             "user_id": u.get("id"),
             "username": u.get("username"),
-            "score": round(total_obtained_points, 2),
+            # Every wrong submission costs the contest's penalty in points, so the score can go below zero.
+            "score": round(total_obtained_points - total_penalty, 2),
+            "points_earned": round(total_obtained_points, 2),
             "total_points": total_contest_points,
             "penalty": total_penalty,
             "solved_count": len(passed_qids),
