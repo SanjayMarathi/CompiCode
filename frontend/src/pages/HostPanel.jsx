@@ -203,7 +203,7 @@ export default function HostPanel() {
           </div>
 
           <div className="grid grid-2" style={{ gap: '0 1rem' }}>
-            <div className="form-group"><label htmlFor="c-limit">Time limit (min)</label><input id="c-limit" type="number" min="1" max="480" className="form-input" value={overallLimit} onChange={e => setOverallLimit(e.target.value)} /></div>
+            <div className="form-group"><label htmlFor="c-limit">{mode === 'timed' ? 'Start window (min)' : 'Time limit (min)'}</label><input id="c-limit" type="number" min="1" max="480" className="form-input" value={overallLimit} onChange={e => setOverallLimit(e.target.value)} /></div>
             <div className="form-group"><label htmlFor="c-pen">WA penalty (pts)</label><input id="c-pen" type="number" min="0" className="form-input" value={penalty} onChange={e => setPenalty(e.target.value)} /></div>
           </div>
           <div className="form-group"><label htmlFor="c-sched">Scheduled start <span className="faint" style={{ textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label><input id="c-sched" type="datetime-local" className="form-input" value={scheduledStart} onChange={e => setScheduledStart(e.target.value)} /></div>

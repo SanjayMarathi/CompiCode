@@ -74,6 +74,7 @@ export default function ContestLayout({ userObj }) {
     try { return JSON.parse(localStorage.getItem(`leaderboard_cache_${linkCode}`)) || []; } catch { return []; }
   });
   const [solvedIds, setSolvedIds] = useState([]);
+  const [questionStarts, setQuestionStarts] = useState(null); // timed mode: question id -> local start ms
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [scheduledCountdown, setScheduledCountdown] = useState(null);
   const [participantStatus, setParticipantStatus] = useState(null);
@@ -125,6 +126,10 @@ export default function ContestLayout({ userObj }) {
     try {
       const res = await axios.get(`${API_URL}/contests/${id}/my-solved`);
       setSolvedIds(res.data.solved_question_ids || []);
+      const now = Date.now();
+      setQuestionStarts(Object.fromEntries(
+        Object.entries(res.data.question_elapsed_seconds || {}).map(([qid, secs]) => [qid, now - secs * 1000])
+      ));
     } catch { /* ignore */ }
   }, []);
 
@@ -206,6 +211,7 @@ export default function ContestLayout({ userObj }) {
   }, [cid, cStatus, cVisibility, linkCode, isHost, participantStatus, fetchLeaderboard, fetchMySolved, fetchPending, handleDeleted]);
 
   // Countdown for standard + timed contests, driven by the server's clock.
+  // In timed mode it is the window for opening problems; the server decides when the contest ends.
   useEffect(() => {
     if (cStatus !== 'active' || !cMode || cMode === 'sudden_death') return;
     const startedAt = Date.now() - (cElapsed || 0) * 1000;
@@ -213,7 +219,7 @@ export default function ContestLayout({ userObj }) {
     const update = () => {
       const elapsed = Math.floor((Date.now() - startedAt) / 1000);
       setElapsedSeconds(elapsed);
-      if (limitSec && elapsed >= limitSec) {
+      if (limitSec && elapsed >= limitSec && cMode !== 'timed') {
         setContest(prev => (prev && prev.status === 'active' ? { ...prev, status: 'ended', end_reason: 'time_up' } : prev));
       }
     };
@@ -389,6 +395,8 @@ export default function ContestLayout({ userObj }) {
   const remaining = Math.max(0, (contest.overall_time_limit || 0) * 60 - elapsedSeconds);
   const showTimer = contestStarted && contest.mode !== 'sudden_death' && contest.overall_time_limit;
   const lowTime = showTimer && remaining <= Math.min(60, contest.overall_time_limit * 6);
+  const isTimed = contest.mode === 'timed';
+  const windowClosed = isTimed && contestStarted && !!contest.overall_time_limit && remaining === 0;
 
   const header = (
     <header className="panel fade-in" style={{ marginBottom: '1.5rem' }}>
@@ -408,7 +416,7 @@ export default function ContestLayout({ userObj }) {
         </div>
         <div className="flex" style={{ flexWrap: 'wrap', justifyContent: 'flex-end', gap: '0.6rem' }}>
           {showTimer && (
-            <span className={`timer-chip ${lowTime ? 'low' : ''}`}><span className="tl">Time left</span>{formatTime(remaining)}</span>
+            <span className={`timer-chip ${lowTime ? 'low' : ''}`}><span className="tl">{isTimed ? 'Start window' : 'Time left'}</span>{windowClosed ? 'Closed' : formatTime(remaining)}</span>
           )}
           {isHost && contest.status === 'active' && (
             <button className="btn btn-danger btn-sm" onClick={() => setDialog('end')}>End contest</button>
@@ -507,7 +515,7 @@ export default function ContestLayout({ userObj }) {
           <section className="fade-in-up stagger-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '2rem 1.25rem', marginBottom: '0.5rem' }}>
             {[
               { icon: 'list', value: contest.questions.length, label: 'Problems' },
-              { icon: 'clock', value: `${contest.overall_time_limit}m`, label: 'Time limit' },
+              { icon: 'clock', value: `${contest.overall_time_limit}m`, label: isTimed ? 'Start window' : 'Time limit' },
               { icon: 'alert', value: formatPenalty(contest.penalty_per_wrong_answer), label: 'Wrong answer' },
             ].map((s) => (
               <div key={s.label} className="bcard bcard-sm">
@@ -564,7 +572,9 @@ export default function ContestLayout({ userObj }) {
     <div className="container">
       {header}
       <div className="stack">
-        {isLateJoiner && elapsedSeconds > 20 && (
+        {windowClosed ? (
+          <div className="banner slide-in-right"><Icon name="lock" size={18} /><span><strong>The start window has closed.</strong> Problems you haven't opened are locked. You can still finish the ones you already opened.</span></div>
+        ) : isLateJoiner && elapsedSeconds > 20 && (
           <div className="banner slide-in-right"><Icon name="bolt" size={18} /><span><strong>Contest in progress.</strong> Pick a problem and start solving.</span></div>
         )}
 
@@ -585,11 +595,11 @@ export default function ContestLayout({ userObj }) {
             <ul className="list">
               {contest.questions.map((q, idx) => {
                 const isSolved = solvedIds.includes(q.id);
-                let locked = false;
-                if (contest.mode === 'timed' && !isSolved) {
-                  const startedAt = parseInt(localStorage.getItem(`contest_${contest.id}_q_${q.id}_start`), 10);
-                  locked = Number.isFinite(startedAt) && Date.now() - startedAt >= (q.time_limit || 0) * 1000;
-                }
+                // Timed: a problem locks when its own countdown runs out, or if it was never opened before the start window closed.
+                const startedAt = questionStarts?.[q.id];
+                const opened = startedAt !== undefined;
+                const left = opened ? Math.max(0, (q.time_limit || 0) - Math.floor((Date.now() - startedAt) / 1000)) : null;
+                const locked = isTimed && !isSolved && (opened ? left === 0 : !!questionStarts && windowClosed);
                 return (
                   <li key={q.id} className="list-row">
                     <span className="avatar" style={isSolved ? { background: 'var(--success)', color: '#fff' } : undefined}>{isSolved ? <Icon name="check" size={18} stroke={2.4} /> : letter(idx)}</span>
@@ -597,15 +607,21 @@ export default function ContestLayout({ userObj }) {
                       <div className="list-title">{q.title}</div>
                       <div className="list-meta">
                         <span>{q.points} pts</span>
-                        {contest.mode === 'timed' && <><span className="dot" /><span>{q.time_limit}s limit</span></>}
+                        {isTimed && <><span className="dot" /><span>{opened && !isSolved && left > 0 ? `${formatTime(left)} left` : `${q.time_limit}s limit`}</span></>}
                       </div>
                     </div>
                     {isSolved ? (
                       <Link to={`/solve/${contest.id}/${q.id}`} className="btn btn-success btn-sm">Review code</Link>
                     ) : locked ? (
-                      <button className="btn btn-ghost btn-sm" disabled title="Your time on this problem has run out"><Icon name="lock" size={14} /> Locked</button>
+                      <button className="btn btn-ghost btn-sm" disabled title={opened ? 'Your time on this problem has run out' : 'The start window closed before you opened this problem'}><Icon name="lock" size={14} /> Locked</button>
                     ) : (
-                      <Link to={`/solve/${contest.id}/${q.id}`} className="btn btn-primary btn-sm">Solve <Icon name="arrow-right" size={15} /></Link>
+                      <Link
+                        to={`/solve/${contest.id}/${q.id}`}
+                        className="btn btn-primary btn-sm"
+                        title={isTimed && !opened ? `Opening this problem starts its ${formatTime(q.time_limit)} countdown` : undefined}
+                      >
+                        {isTimed ? (opened ? 'Continue' : 'Start') : 'Solve'} <Icon name="arrow-right" size={15} />
+                      </Link>
                     )}
                   </li>
                 );

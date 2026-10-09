@@ -107,8 +107,10 @@ export default function SolvePlatform() {
   });
   const [roundCountdown, setRoundCountdown] = useState(10);
   const [contestInfo, setContestInfo] = useState(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0); // contest clock
+  const [questionElapsed, setQuestionElapsed] = useState(null); // timed mode: this problem's clock
   const [currentUser, setCurrentUser] = useState(null);
+  const solvedRef = useRef(false);
   const ws = useRef(null);
   const roundCountdownRef = useRef(null);
   const currentUserRef = useRef(null);
@@ -127,7 +129,8 @@ export default function SolvePlatform() {
       setStatusTone('neutral');
       setEvalResults(null);
       setIsSubmitting(false);
-      setElapsedSeconds(0);
+      setQuestionElapsed(null);
+      solvedRef.current = false;
 
       const saved = localStorage.getItem(`code_${contestId}_${questionId}`);
       setCode(saved !== null ? saved : boilerplates[language]);
@@ -135,6 +138,7 @@ export default function SolvePlatform() {
       fetchQuestionDetailed(questionId);
       axios.get(`${API_URL}/contests/${contestId}/my-solved`).then(res => {
         if ((res.data.solved_question_ids || []).map(String).includes(String(questionId))) {
+          solvedRef.current = true;
           setAlreadySolved(true);
           setStatus('Already solved');
           setStatusTone('ok');
@@ -230,69 +234,77 @@ export default function SolvePlatform() {
     } catch (e) { alert(e.response?.data?.detail || 'Failed to kick participant'); }
   };
 
+  // Contest clock for standard + timed. It is shared by every problem, so it must not restart per problem.
   useEffect(() => {
-    if (!isSuddenDeath && contestInfo) {
-      if (contestInfo.mode === 'standard') {
-        let start;
-        if (contestInfo.server_elapsed_seconds !== undefined && contestInfo.server_elapsed_seconds !== null) {
-          start = Date.now() - (contestInfo.server_elapsed_seconds * 1000);
-        } else if (contestInfo.start_time) {
-          start = new Date(contestInfo.start_time + 'Z').getTime();
-        } else {
-          const lsKey = `contest_${contestId}_start`;
-          if (!localStorage.getItem(lsKey)) localStorage.setItem(lsKey, Date.now().toString());
-          start = parseInt(localStorage.getItem(lsKey));
-        }
-
-        const updateTimer = () => {
-          const currentElapsed = Math.floor((Date.now() - start) / 1000);
-          setElapsedSeconds(currentElapsed);
-          if (contestInfo.overall_time_limit && currentElapsed >= contestInfo.overall_time_limit * 60) {
-            navigate(`/contest/${contestId}`);
-          }
-        };
-
-        updateTimer();
-        const interval = setInterval(updateTimer, 1000);
-        return () => clearInterval(interval);
-      } else if (contestInfo.mode === 'timed') {
-        const questions = contestInfo.questions || [];
-        const q = questions.find(x => String(x.id) === String(questionId));
-        if (q) {
-          const timeLimit = q.time_limit;
-          const lsKey = `contest_${contestId}_q_${questionId}_start`;
-          if (!localStorage.getItem(lsKey)) localStorage.setItem(lsKey, Date.now().toString());
-          const start = parseInt(localStorage.getItem(lsKey));
-          const initialElapsed = Math.floor((Date.now() - start) / 1000);
-          if (initialElapsed >= timeLimit) {
-            setElapsedSeconds(timeLimit);
-            setStatus('Time is up — locked');
-            setStatusTone('bad');
-            setAlreadySolved(true);
-          } else {
-            setElapsedSeconds(initialElapsed);
-          }
-          const interval = setInterval(() => {
-            const elapsed = Math.floor((Date.now() - start) / 1000);
-            if (elapsed >= timeLimit) {
-              setElapsedSeconds(timeLimit);
-              setStatus('Time is up — auto-submitting');
-              setStatusTone('bad');
-              setAlreadySolved(true);
-              clearInterval(interval);
-              if (executeSubmissionRef.current) {
-                executeSubmissionRef.current(null, true);
-              }
-            } else {
-              setElapsedSeconds(elapsed);
-            }
-          }, 1000);
-          return () => clearInterval(interval);
-        }
-      }
+    if (isSuddenDeath || !contestInfo || (contestInfo.mode !== 'standard' && contestInfo.mode !== 'timed')) return;
+    let start;
+    if (contestInfo.server_elapsed_seconds !== undefined && contestInfo.server_elapsed_seconds !== null) {
+      start = Date.now() - (contestInfo.server_elapsed_seconds * 1000);
+    } else if (contestInfo.start_time) {
+      start = new Date(contestInfo.start_time + 'Z').getTime();
+    } else {
+      const lsKey = `contest_${contestId}_start`;
+      if (!localStorage.getItem(lsKey)) localStorage.setItem(lsKey, Date.now().toString());
+      start = parseInt(localStorage.getItem(lsKey));
     }
+
+    const updateTimer = () => {
+      const currentElapsed = Math.floor((Date.now() - start) / 1000);
+      setElapsedSeconds(currentElapsed);
+      // In timed mode the limit only closes the window for opening problems; the server ends the contest.
+      if (contestInfo.mode === 'standard' && contestInfo.overall_time_limit && currentElapsed >= contestInfo.overall_time_limit * 60) {
+        navigate(`/contest/${contestId}`);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSuddenDeath, contestInfo, questionId, contestId]);
+  }, [isSuddenDeath, contestInfo, contestId]);
+
+  // Timed mode: the server starts this problem's own countdown the first time it is opened.
+  const contestMode = contestInfo?.mode;
+  useEffect(() => {
+    if (isSuddenDeath || contestMode !== 'timed') return;
+    let alive = true;
+    let interval;
+    const lock = (message) => {
+      setStatus(message);
+      setStatusTone('bad');
+      setAlreadySolved(true);
+    };
+    axios.post(`${API_URL}/contests/${contestId}/questions/${questionId}/start`).then(({ data }) => {
+      if (!alive) return;
+      const limit = data.time_limit;
+      if (data.locked) {
+        setQuestionElapsed(limit);
+        if (!solvedRef.current) lock('Locked: the start window closed before you opened this problem');
+        return;
+      }
+      const start = Date.now() - data.elapsed_seconds * 1000;
+      const tick = () => {
+        const elapsed = Math.min(limit, Math.floor((Date.now() - start) / 1000));
+        setQuestionElapsed(elapsed);
+        return elapsed >= limit;
+      };
+      if (tick()) {
+        if (!solvedRef.current) lock('Time is up — locked');
+        return;
+      }
+      interval = setInterval(() => {
+        if (solvedRef.current) { clearInterval(interval); return; }
+        if (tick()) {
+          clearInterval(interval);
+          lock('Time is up — auto-submitting');
+          if (executeSubmissionRef.current) executeSubmissionRef.current(null, true);
+        }
+      }, 1000);
+    }).catch((err) => {
+      if (alive) lock(err.response?.data?.detail || "Could not start this problem's timer. Reload to try again.");
+    });
+    return () => { alive = false; clearInterval(interval); };
+  }, [isSuddenDeath, contestMode, contestId, questionId]);
 
   useEffect(() => {
     if (isSuddenDeath && sdState && sdState.state === 'WAITING_TO_START') {
@@ -358,6 +370,7 @@ export default function SolvePlatform() {
         code, language, question_id: String(activeQ), contest_id: String(contestId)
       });
       if (res.data.already_solved) {
+        solvedRef.current = true;
         setStatus('Already solved');
         setStatusTone('ok');
         setAlreadySolved(true);
@@ -368,6 +381,7 @@ export default function SolvePlatform() {
         setEvalResults(res.data.results);
         setSubmitCount(c => c + 1);
         if (res.data.passed) {
+          solvedRef.current = true;
           setStatus('Accepted');
           setStatusTone('ok');
           setAlreadySolved(true);
@@ -451,7 +465,7 @@ export default function SolvePlatform() {
   const activeContestQ = contestInfo?.questions?.find(x => String(x.id) === String(qData?.id || questionId));
   const overallRemaining = contestInfo?.overall_time_limit ? Math.max(0, contestInfo.overall_time_limit * 60 - elapsedSeconds) : 0;
   const timedQ = timedQuestions.find(x => String(x.id) === String(questionId));
-  const timedRemaining = timedQ ? Math.max(0, timedQ.time_limit - elapsedSeconds) : 0;
+  const timedRemaining = timedQ && questionElapsed !== null ? Math.max(0, timedQ.time_limit - questionElapsed) : null;
   const passedCount = evalResults ? evalResults.filter(r => r.passed).length : 0;
 
   const statusEl = status && (
@@ -473,8 +487,8 @@ export default function SolvePlatform() {
           {!isSuddenDeath && contestInfo && contestInfo.mode === 'standard' && <TimerChip label="Time left" value={formatTime(overallRemaining)} low={overallRemaining <= 60} />}
           {!isSuddenDeath && contestInfo && contestInfo.mode === 'timed' && (
             <>
-              {contestInfo.overall_time_limit ? <TimerChip label="Contest" value={formatTime(overallRemaining)} low={overallRemaining <= 60} /> : null}
-              <TimerChip label="This problem" value={formatTime(timedRemaining)} low={timedRemaining <= 30} />
+              {contestInfo.overall_time_limit ? <TimerChip label="Start window" value={overallRemaining > 0 ? formatTime(overallRemaining) : 'Closed'} low={overallRemaining <= 60} /> : null}
+              <TimerChip label="This problem" value={timedRemaining === null ? '–:––' : formatTime(timedRemaining)} low={timedRemaining !== null && timedRemaining <= 30} />
             </>
           )}
           {isSuddenDeath && <span className="badge badge-solid"><Icon name="bolt" size={12} /> Round {sdState ? sdState.current_q_idx + 1 : 1}</span>}

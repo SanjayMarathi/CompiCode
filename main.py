@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse
 import os
 import uuid
 from google.cloud.firestore_v1.base_query import FieldFilter
+from google.api_core.exceptions import AlreadyExists
 
 from database import db
 
@@ -27,6 +28,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 SWEEP_INTERVAL_SECONDS = 30
 MAX_CODE_CHARS = 100_000  # stored with every submission; keeps documents far below Firestore's 1 MiB limit
+TIMED_GRACE_SECONDS = 15  # Timed mode: lets the auto-submit fired at a problem's deadline still land
 MAIN_LOOP: Optional[asyncio.AbstractEventLoop] = None
 
 
@@ -194,10 +196,13 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 # --- Contest time-up handling ---
-# Every mode shares one wall-clock rule: a contest that has been active for
-# longer than `overall_time_limit` minutes is over. The rule is applied lazily
-# by every read/submit path *and* eagerly by the background sweeper, so a
-# contest can no longer stay "active" just because nobody happened to poll it.
+# A contest that has been active for longer than `overall_time_limit` minutes
+# is over. Timed mode is the exception: there the limit is only the window for
+# *opening* problems. A problem opened inside the window keeps its own
+# countdown, so the contest stays active until the last of those runs out.
+# The rule is applied lazily by every read/submit path *and* eagerly by the
+# background sweeper, so a contest can no longer stay "active" just because
+# nobody happened to poll it.
 def _parse_ts(value) -> Optional[datetime]:
     if not value:
         return None
@@ -212,13 +217,36 @@ def contest_elapsed_seconds(data: dict) -> float:
         return 0.0
     return max(0.0, (datetime.utcnow() - started).total_seconds())
 
-def contest_time_is_up(data: dict) -> bool:
+def question_start_id(contest_id: str, user_id: str, question_id: str) -> str:
+    return f"{contest_id}_{user_id}_{question_id}"
+
+def timed_close_seconds(contest_id: str, data: dict) -> float:
+    """Seconds after the start at which a timed contest closes for good."""
+    started = _parse_ts(data.get("start_time"))
+    def _load():
+        latest = data["overall_time_limit"] * 60
+        starts = db.collection("question_starts").where(filter=FieldFilter("contest_id", "==", contest_id)).stream()
+        for s in starts:
+            deadline = _parse_ts(s.to_dict().get("deadline"))
+            if deadline:
+                latest = max(latest, (deadline - started).total_seconds())
+        return latest + TIMED_GRACE_SECONDS
+    # Only called once the window has shut, when no new deadlines can appear.
+    return cached(f"timed_close:{contest_id}", 30, _load)
+
+def contest_time_is_up(contest_id: str, data: dict) -> bool:
     if data.get("status") != "active":
         return False
     limit = data.get("overall_time_limit")
     if not limit or not data.get("start_time"):
         return False
-    return contest_elapsed_seconds(data) >= limit * 60
+    elapsed = contest_elapsed_seconds(data)
+    if data.get("mode") == "timed":
+        # Waiting out the grace first lets problems opened at the last moment land.
+        if elapsed < limit * 60 + TIMED_GRACE_SECONDS:
+            return False
+        return elapsed >= timed_close_seconds(contest_id, data)
+    return elapsed >= limit * 60
 
 def _ended_fields(reason: str) -> dict:
     return {"status": "ended", "end_reason": reason, "ended_at": datetime.utcnow().isoformat() + "Z"}
@@ -248,7 +276,7 @@ async def announce_contest_ended(contest_id: str, mode: Optional[str]):
 
 def expire_contest_if_needed(contest_doc, data: dict) -> bool:
     """End the contest in Firestore if its time is up. Mutates `data` to match."""
-    if not contest_doc.exists or not contest_time_is_up(data):
+    if not contest_doc.exists or not contest_time_is_up(contest_doc.id, data):
         return False
     contest_doc.reference.update(_ended_fields("time_up"))
     data["status"] = "ended"
@@ -621,7 +649,7 @@ async def delete_contest(contest_id: str, current_user: dict = Depends(get_curre
     def _purge():
         # Firestore batches are capped at 500 writes.
         refs = [doc.reference]
-        for coll in ("participants", "submissions"):
+        for coll in ("participants", "submissions", "question_starts"):
             refs += [s.reference for s in db.collection(coll).where(filter=FieldFilter("contest_id", "==", contest_id)).stream()]
         for i in range(0, len(refs), 400):
             batch = db.batch()
@@ -681,6 +709,71 @@ async def sandbox_test(req: SandboxTestRequest, current_user: dict = Depends(get
     passed = all(res.get("passed", False) for res in eval_results) if eval_results else False
     return {"passed": passed, "results": eval_results}
 
+def participant_block_reason(contest_id: str, contest: dict, user_id: str) -> Optional[str]:
+    """Why this user may not compete, or None. Public contests enrol them on first use."""
+    if user_id == contest.get("host_id"):
+        return None
+    p_docs = db.collection("participants").where(filter=FieldFilter("contest_id", "==", contest_id))\
+        .where(filter=FieldFilter("user_id", "==", user_id)).limit(1).stream()
+    p_doc = next(p_docs, None)
+    if p_doc is None:
+        if contest.get("visibility", "public") == "private":
+            return "This is a private contest. Request access from the host first."
+        db.collection("participants").add({
+            "contest_id": contest_id,
+            "user_id": user_id,
+            "status": "accepted",
+            "joined_at": datetime.utcnow().isoformat()
+        })
+    elif p_doc.to_dict().get("status", "accepted") != "accepted":
+        return "You are not an approved participant of this contest."
+    return None
+
+@app.post("/contests/{contest_id}/questions/{question_id}/start")
+def start_timed_question(contest_id: str, question_id: str, current_user: dict = Depends(get_current_user)):
+    """Timed mode: start this user's countdown on a problem, or report the one already running.
+
+    Problems can only be started while the contest's start window is open.
+    """
+    contest_doc = db.collection("contests").document(contest_id).get()
+    if not contest_doc.exists:
+        raise HTTPException(status_code=404, detail="Contest not found")
+    contest = contest_doc.to_dict()
+    if contest.get("mode") != "timed":
+        raise HTTPException(status_code=400, detail="Only timed contests have per-problem timers")
+    cq = next((q for q in contest.get("questions", []) if q.get("question_id") == question_id), None)
+    if cq is None:
+        raise HTTPException(status_code=404, detail="This problem is not part of the contest")
+    time_limit = cq.get("time_limit") or 0
+
+    ref = db.collection("question_starts").document(question_start_id(contest_id, current_user["id"], question_id))
+    snap = ref.get()
+    if not snap.exists:
+        expire_contest_if_needed(contest_doc, contest)
+        if contest.get("status") != "active":
+            raise HTTPException(status_code=400, detail="This contest is not running.")
+        blocked = participant_block_reason(contest_id, contest, current_user["id"])
+        if blocked:
+            raise HTTPException(status_code=403, detail=blocked)
+        window = contest.get("overall_time_limit")
+        if window and contest_elapsed_seconds(contest) >= window * 60:
+            return {"locked": True, "time_limit": time_limit, "elapsed_seconds": 0}
+        now = datetime.utcnow()
+        try:
+            ref.create({
+                "contest_id": contest_id,
+                "user_id": current_user["id"],
+                "question_id": question_id,
+                "started_at": now.isoformat() + "Z",
+                "deadline": (now + timedelta(seconds=time_limit)).isoformat() + "Z",
+            })
+        except AlreadyExists:
+            pass  # another tab started it first
+        snap = ref.get()
+
+    started = _parse_ts(snap.to_dict().get("started_at"))
+    return {"locked": False, "time_limit": time_limit, "elapsed_seconds": max(0.0, (datetime.utcnow() - started).total_seconds())}
+
 class CodeSubmission(BaseModel):
     code: str
     language: str
@@ -715,21 +808,18 @@ async def submit_code(submission: CodeSubmission, current_user: dict = Depends(g
     if contest.get("status") != "active":
         return {"passed": False, "results": [], "error": "This contest has ended. Submissions are no longer accepted."}
 
-    if current_user["id"] != contest.get("host_id"):
-        p_docs = db.collection("participants").where(filter=FieldFilter("contest_id", "==", submission.contest_id))\
-            .where(filter=FieldFilter("user_id", "==", current_user["id"])).limit(1).stream()
-        p_doc = next(p_docs, None)
-        if p_doc is None:
-            if contest.get("visibility", "public") == "private":
-                return {"passed": False, "results": [], "error": "This is a private contest. Request access from the host first."}
-            db.collection("participants").add({
-                "contest_id": submission.contest_id,
-                "user_id": current_user["id"],
-                "status": "accepted",
-                "joined_at": datetime.utcnow().isoformat()
-            })
-        elif p_doc.to_dict().get("status", "accepted") != "accepted":
-            return {"passed": False, "results": [], "error": "You are not an approved participant of this contest."}
+    blocked = participant_block_reason(submission.contest_id, contest, current_user["id"])
+    if blocked:
+        return {"passed": False, "results": [], "error": blocked}
+
+    if contest.get("mode") == "timed":
+        start = db.collection("question_starts").document(
+            question_start_id(submission.contest_id, current_user["id"], submission.question_id)).get()
+        if not start.exists:
+            return {"passed": False, "results": [], "error": "This problem is locked: it was not opened before the start window closed."}
+        deadline = _parse_ts(start.to_dict().get("deadline"))
+        if deadline and datetime.utcnow() > deadline + timedelta(seconds=TIMED_GRACE_SECONDS):
+            return {"passed": False, "results": [], "error": "Your time on this problem is up."}
 
     state = manager.get_state(submission.contest_id)
     if contest.get("mode") == "sudden_death" and state and state["state"] != "QUESTION_ACTIVE":
@@ -1036,7 +1126,20 @@ def get_my_solved(contest_id: str, current_user: dict = Depends(get_current_user
     solved = db.collection("submissions").where(filter=FieldFilter("contest_id", "==", contest_id))\
         .where(filter=FieldFilter("user_id", "==", current_user["id"]))\
         .where(filter=FieldFilter("passed", "==", True)).stream()
-    return {"solved_question_ids": list(set(s.to_dict().get("question_id") for s in solved))}
+    # Timed mode: how long ago each problem's countdown started (absent = not opened yet).
+    starts = db.collection("question_starts").where(filter=FieldFilter("contest_id", "==", contest_id))\
+        .where(filter=FieldFilter("user_id", "==", current_user["id"])).stream()
+    now = datetime.utcnow()
+    question_elapsed = {}
+    for s in starts:
+        d = s.to_dict()
+        started = _parse_ts(d.get("started_at"))
+        if started:
+            question_elapsed[d.get("question_id")] = max(0.0, (now - started).total_seconds())
+    return {
+        "solved_question_ids": list(set(s.to_dict().get("question_id") for s in solved)),
+        "question_elapsed_seconds": question_elapsed,
+    }
 
 def _question_title(question_id: str) -> str:
     def _load():

@@ -78,7 +78,7 @@ export const MODE_META = {
     label: 'Timed',
     icon: 'timer',
     short: 'Every problem has its own clock',
-    desc: 'Each problem has an independent countdown. When it expires, that problem locks for you permanently.',
+    desc: 'The contest clock is your window to open problems. Each problem you open gets its own countdown, which keeps running after the window closes. When it expires, that problem locks for you.',
   },
 };
 

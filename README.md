@@ -57,7 +57,7 @@ Host or join live coding contests, get judged automatically, review what everyon
 | Mode | How it plays |
 |---|---|
 | **Standard** | Everyone solves every problem at their own pace inside one global time limit. Ranked by score, then lowest penalty time. |
-| **Timed** | Every problem has its own countdown. When it expires, that problem locks for you. |
+| **Timed** | The contest clock is the window for opening problems. Each problem you open gets its own countdown, which keeps running after the window closes. When it expires, that problem locks for you. |
 | **Sudden Death** | The whole lobby is on the same problem. The first person to pass every testcase claims the round and everybody advances together. |
 
 ### Hosting and moderation
@@ -170,11 +170,13 @@ There are three different clocks:
 
 | Limit | Where you set it | Applies to | What happens at zero |
 |---|---|---|---|
-| **Contest time limit** | Contest form, in minutes (1 to 480, default 60) | The whole contest, every mode | The contest ends for everyone and standings lock. |
+| **Contest time limit** | Contest form, in minutes (1 to 480, default 60) | The whole contest, every mode | Standard and Sudden Death: the contest ends for everyone and standings lock. Timed: the start window closes (see below). |
 | **Problem time limit** | Problem editor, in seconds (minimum 30, default 300) | **Timed mode**, one limit **per problem** | The participant's current code is auto-submitted and that problem locks for them. |
 | **Execution limit** | The judge | Every run of a submission | A run that exceeds it fails. The reference executor (`executor.py`) allows Python 2 s, C++ 2 s (after a 5 s compile) and Java 3 s (after a 5 s compile). |
 
-In **Timed** mode a problem's countdown starts when a participant first opens it, and the contest limit still applies on top: if it runs out first, the contest ends. In **Standard** and **Sudden Death** the per-problem limit is not used (Sudden Death rounds end when somebody solves the problem, and the contest limit is the match clock).
+In **Timed** mode the contest limit is a **start window**: one clock shared by every problem, counting from the contest start. A problem's own countdown starts the first time a participant opens it, and it can only be opened while the start window is open. A problem opened in time keeps its full countdown even if the start window closes first. Problems never opened before the window closes are locked. The contest ends once the last open countdown has run out. Start times are recorded on the server, and submissions after a problem's deadline are rejected.
+
+In **Standard** and **Sudden Death** the per-problem limit is not used (Sudden Death rounds end when somebody solves the problem, and the contest limit is the match clock).
 
 In Timed mode each problem's limit is shown next to it in the host's problem list and in the contest's problem list.
 
@@ -360,9 +362,10 @@ Most routes require `Authorization: Bearer <token>`. Registration, login, the co
 | `POST` | `/contests/{id}/start` | Host starts the contest (idempotent) |
 | `POST` | `/contests/{id}/open` | Host opens a non-sudden-death contest |
 | `POST` | `/contests/{id}/end` | Host ends the contest |
-| `DELETE` | `/contests/{id}` | Host deletes the contest, its participants and submissions |
+| `DELETE` | `/contests/{id}` | Host deletes the contest, its participants, submissions and problem start times |
 | `GET` | `/contests/{id}/leaderboard` | Standings |
-| `GET` | `/contests/{id}/my-solved` | Problems you have solved |
+| `GET` | `/contests/{id}/my-solved` | Problems you have solved, plus how long ago you opened each one (Timed mode) |
+| `POST` | `/contests/{id}/questions/{question_id}/start` | Timed mode: start your countdown on a problem (or report the running one). Returns `locked` once the start window has closed |
 
 **Participation and approvals**
 
@@ -398,6 +401,7 @@ Firestore collections:
 | `questions` | `title`, `description`, `is_global`, `creator_id`, `test_cases[{input_data, expected_output}]` |
 | `contests` | `title`, `mode`, `visibility`, `evaluation_mode`, `host_id`, `link_code`, `status` (`waiting`, `active`, `ended`), `end_reason`, `overall_time_limit`, `penalty_per_wrong_answer`, `start_time`, `scheduled_start_time`, `created_at`, `questions[{question_id, points, time_limit}]` |
 | `participants` | `contest_id`, `user_id`, `status` (`pending`, `accepted`, `rejected`), `joined_at` |
+| `question_starts` | Timed mode, one per participant and problem (id `{contest_id}_{user_id}_{question_id}`): `contest_id`, `user_id`, `question_id`, `started_at`, `deadline` |
 | `submissions` | `contest_id`, `user_id`, `question_id`, `passed`, `verdict` (`accepted`, `wrong_answer`, `error`), `testcases_passed`, `total_testcases`, `penalty_incurred`, `time_taken`, `language`, `code`, `timestamp` |
 
 Submissions made before code logging was added have no `code`; the host viewer says so instead of showing an empty editor.
@@ -430,7 +434,6 @@ The look is a sky-blue accent on white (light) or black (dark), with navy text, 
 
 ## Roadmap
 
-- Server-enforced per-problem timers for Timed mode (today they run in the browser).
 - Server-side scheduled starts (today the host's open tab triggers the start).
 - A scoring toggle in the contest form to expose `partial` evaluation.
 - Let participants revisit their own past submissions.
